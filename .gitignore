@@ -1,5 +1,6 @@
 .vscode/
 config.yml
+dev-guid.txt
 .idea
 db
 uploads
