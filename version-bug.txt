@@ -26,23 +26,37 @@ v1.5.4
 本地开发变化
 ============
 
-v1.5.4-erkai.1
+v1.5.4-1
 --------------
-- 状态：开发中。
+- 状态：首个二开测试版本镜像已发布。
 - 基础版本：v1.5.4。
+- Docker Hub 镜像：litehub/dujiao-next-erkai:1.5.4-1
+- Docker Hub 最新标签：litehub/dujiao-next-erkai:latest
+- 镜像摘要：sha256:96cf5111ba667be02c586aa0cfd4062ab2570881cb32361a0926055c7bffd43c
 - 当前变化：
   - 完成 develop 分支建立并推送到个人 GitHub 仓库。
   - 完成 PostgreSQL 16、Redis 7 和应用 Docker 容器的本地运行验证。
-  - 完成首版测试镜像 litehub/dujiao-next-erkai:dev 的构建。
+  - 完成首版正式版本镜像 litehub/dujiao-next-erkai:1.5.4-1 和 latest 的构建与推送。
   - 配置 Docker 国内备用镜像源。
   - 确认后续 UI 调整需要同时适配移动端。
 - 支付二次确认：暂未开发，后续单独记录。
 - UI 调整：暂未开发，后续单独记录。
 - 测试结果：基础健康检查、前台和后台入口均验证通过。
-- Docker 容器：测试结束后已停止。
+- Docker 容器：测试结束后已停止并清理旧应用容器。
 
 后续版本记录模板
 ================
+
+当前待记录版本
+==============
+
+v1.5.4-2（待发布）
+------------------
+- 本地开发变化：移除原作者单二进制自动下载、替换和回滚功能。
+- 本地开发变化：版本检测改为查询 Docker Hub `litehub/dujiao-next-erkai` 的具体版本标签，忽略 `latest` 和 `dev`。
+- 本地开发变化：后台只提示带 `.env` 和 `docker-compose.postgres.yml` 参数的 Compose 更新命令。
+- 本地开发变化：更新弹窗保留移动端适配，并同步三种语言文案。
+- 测试结果：后台前端测试 43 项通过，生产构建通过；Go 检查待安装 Go 环境后执行。
 
 版本：v1.5.4-erkai.2
 日期：

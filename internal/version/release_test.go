@@ -2,6 +2,27 @@ package version
 
 import "testing"
 
+func TestLatestDockerHubTag(t *testing.T) {
+	tags := []dockerHubTagItem{
+		{Name: "latest"},
+		{Name: "dev"},
+		{Name: "stable"},
+		{Name: "1.5.4-1"},
+		{Name: "1.5.4-2"},
+		{Name: "1.6.0-beta.1"},
+	}
+	got, ok := latestDockerHubTag(tags)
+	if !ok || got.Name != "1.6.0-beta.1" {
+		t.Fatalf("latestDockerHubTag() = %q, %v; want 1.6.0-beta.1, true", got.Name, ok)
+	}
+}
+
+func TestLatestDockerHubTagWithoutVersion(t *testing.T) {
+	if _, ok := latestDockerHubTag([]dockerHubTagItem{{Name: "latest"}, {Name: "dev"}}); ok {
+		t.Fatal("latestDockerHubTag() accepted non-version tags")
+	}
+}
+
 func TestIsNewerVersion(t *testing.T) {
 	cases := []struct {
 		latest, current string

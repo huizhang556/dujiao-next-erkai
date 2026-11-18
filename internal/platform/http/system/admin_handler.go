@@ -8,7 +8,6 @@ import (
 	ginutil "github.com/dujiao-next/internal/platform/http/ginutil"
 
 	"github.com/dujiao-next/internal/platform/http/response"
-	"github.com/dujiao-next/internal/selfupdate"
 	"github.com/dujiao-next/internal/version"
 
 	"github.com/gin-gonic/gin"
@@ -28,8 +27,6 @@ func (defaultReleaseChecker) CheckLatestRelease(ctx context.Context) (*version.C
 // AdminHandler 处理后台系统信息请求。
 type AdminHandler struct {
 	releases ReleaseChecker
-	// updates 一键升级任务管理器。进程内单例，串行化升级任务并保存可轮询的进度。
-	updates *selfupdate.Manager
 }
 
 func NewAdminHandler(releases ReleaseChecker) *AdminHandler {
@@ -38,11 +35,10 @@ func NewAdminHandler(releases ReleaseChecker) *AdminHandler {
 	}
 	return &AdminHandler{
 		releases: releases,
-		updates:  selfupdate.NewManager(),
 	}
 }
 
-// CheckSystemUpdate 通过 GitHub Releases API 检测是否有新版本发布
+// CheckSystemUpdate 通过 Docker Hub 标签检测是否有新版本发布。
 // GET /api/v1/admin/system/version/check
 func (h *AdminHandler) CheckSystemUpdate(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 12*time.Second)

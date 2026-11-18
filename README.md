@@ -1,281 +1,385 @@
-# Dujiao-Next
+# Dujiao-Next 二开版
 
-Dujiao-Next is a digital goods e-commerce platform. This repository contains the complete
-application: the Go backend, the customer storefront, and the admin panel.
+本项目基于 [Dujiao-Next](https://github.com/dujiao-next/dujiao-next) 二次开发，使用 Docker Compose 和 PostgreSQL 部署。
 
-## ❤️ Brand Partners (Sponsors)
+镜像仓库：`litehub/dujiao-next-erkai`
 
-<table>
-<tr>
-<td width="180"><a href="https://niub.me"><img src="assets/partners/niub.png" alt="openmodel" width="150"></a></td>
-<td> <a href="https://niub.me">NIUB — 数字服务，一站直达(DujiaoNext自营旗舰店)</a> 正在寻找更便捷的 AI 服务、社交账号或数字礼品卡？NIUB（niub.me）专注提供多种虚拟商品与数字服务，让不同类型的数字需求都能在一个站点完成选购。
-我们重视清晰的商品信息、明确的交付方式和负责任的售后支持。每件商品的账号类型、适用地区、有效期限、使用条件与售后范围，均以对应商品页面说明为准。
-访问 NIUB，探索更多数字服务与虚拟商品。</td>
-</tr>
+## 技术栈
 
+- 后端：Go、Gin、GORM
+- 前端：Vue 3、TypeScript、Vite、Tailwind CSS
+- 数据库：PostgreSQL 16
+- 缓存和任务队列：Redis 7
+- 部署：Docker Compose
 
+## 仓库结构
 
-</table>
-
-## Tech Stack
-
-| Layer | Stack |
-| --- | --- |
-| Backend | Go 1.26 · Gin · GORM · SQLite / PostgreSQL |
-| Auth | JWT (separate admin / user realms) · Casbin RBAC · TOTP 2FA |
-| Async | asynq on Redis (optional — the server runs without it) |
-| Config | Viper (`config.yml`) |
-| Frontend | Vue 3 · Vite · TypeScript · Tailwind CSS v4 · pnpm 10 |
-| Admin UI | shadcn-vue / reka-ui |
-
-## Repository Layout
-
-```
-.
-├── cmd/server/               # entry point; also hosts the `admin` operator subcommands
-├── internal/
-│   ├── app/                  # composition root
-│   │   ├── container/        # dependency-injection container
-│   │   ├── httpserver/       # Gin router, route groups, middleware
-│   │   └── jobs/             # asynq worker service and consumers
-│   ├── bootstrap/            # per-module wiring (adapters.go + wiring.go)
-│   ├── modules/              # 35 business modules — one vertical slice per domain
-│   ├── workflows/            # use cases that span several modules
-│   ├── platform/             # framework-facing infrastructure
-│   │   ├── database/gormdb/  # connection, auto-migration
-│   │   └── http/             # response envelope, Gin helpers
-│   ├── shared/               # dependency-free primitives (money, jsonmap, serial …)
-│   ├── authz/                # Casbin RBAC: policy model, built-in role seeds
-│   ├── web/                  # SPA embedding and mounting (build-tag gated)
-│   ├── architecture/         # architecture guard tests — no production code
-│   ├── cache/ config/ constants/ crypto/ i18n/ logger/ queue/ version/
-│   └── admincmd/ htmltext/ persistence/ telegramidentity/ testkit/ upstream/
-├── frontend/
-│   ├── admin/                # admin panel SPA        (dev :5174)
-│   └── user/                 # customer storefront SPA (dev :5173)
-├── config.yml.example
-├── Dockerfile                # single full-stack image
-└── .goreleaser.yaml
+```text
+cmd/server/          后端服务入口
+internal/            后端业务代码
+frontend/user/       用户端前台
+frontend/admin/      管理端后台
+config.yml.example   配置示例
+Dockerfile           Docker 镜像构建文件
+docker-compose.yml   本地 Compose 配置
 ```
 
-Runtime directories created on first start: `db/` (SQLite), `uploads/`, `logs/`.
+## Linux 部署
 
-## Architecture
+以下命令在 Linux 服务器执行，需要提前安装 Docker 和 Docker Compose 插件。本教程使用部署目录 `/opt/dujiao-next-erkai`。
 
-A modular monolith. Each domain under `internal/modules/<name>/` is a vertical slice with its
-own layers:
-
-| Layer | Holds | May import |
-| --- | --- | --- |
-| `domain/` | entities, value objects, business invariants | nothing from the other layers |
-| `application/` | use cases, port interfaces | `domain`, `contract` |
-| `infrastructure/` | GORM stores, gateways, queue adapters | `domain`, `application` ports |
-| `transport/` | HTTP handlers, presenters | `application` contracts |
-| `contract/` | port interfaces the application layer depends on, and the module's public surface for other modules | — |
-
-**These rules are enforced by tests, not convention.** `internal/architecture/` parses every
-import in the tree and fails the build on violations. The main ones:
-
-- `domain` must not reach into `application`, `infrastructure`, or `transport`
-- `application` must not import Gin or asynq — no transport libraries in use cases
-- only a module's `infrastructure/gormstore` adapter may import GORM
-- `transport` depends on application contracts, never on concrete stores
-- `internal/shared` stays free of modules, GORM, Gin, and asynq
-- `internal/platform` must not depend on business modules
-
-Run them with the rest of the suite: `go test ./internal/architecture/...`
-
-Modules never import each other's internals — they talk through `contract/`, and the wiring
-lives in `internal/bootstrap/<module>/`.
-
-### RBAC
-
-Every `/api/v1/admin/...` route passes through Casbin. The permission catalog is generated
-from the live route table, but the **built-in roles are hand-maintained** in
-`internal/authz/bootstrap.go`. Adding an admin route without adding it to a role seed leaves
-that route reachable only by the super admin. `internal/app/httpserver/rbac_coverage_test.go`
-checks that every registered route is covered.
-
-## Build Tags
-
-| Tag | Effect |
-| --- | --- |
-| *(none)* | API only. No SPAs mounted — the default for local development. |
-| `fullstack` | Embeds `internal/web/dist/{admin,user}` into the binary via `go:embed`. |
-| `release` | Production behavior for outbound URL building. |
-
-`go:embed all:dist/admin all:dist/user` requires **both** directories to exist, so a
-`fullstack` build fails outright if the frontends were not built first. A plain `go build`
-does not compile `embed_fullstack.go` — after touching `internal/web/`, verify with
-`go build -tags release,fullstack ./cmd/server`.
-
-## Run Modes
+### 1. 准备部署目录
 
 ```bash
-./dujiao-next                 # all    — HTTP server + background worker (default)
-./dujiao-next -mode api       # HTTP server only
-./dujiao-next -mode worker    # background worker only
+mkdir -p /opt/dujiao-next-erkai/{config,data/db,data/uploads,data/logs,data/redis,data/postgres}
+cd /opt/dujiao-next-erkai
+chmod -R 0777 ./data/logs ./data/db ./data/uploads ./data/redis ./data/postgres
 ```
 
-Operator subcommands ship in the same binary, so a container needs no extra tooling:
+项目容器默认使用非 root 用户运行。首次部署执行上述权限设置，避免日志、上传文件和数据库目录权限不足。
+
+### 2. 准备配置文件
 
 ```bash
-./dujiao-next admin list-admins
-./dujiao-next admin reset-password
-./dujiao-next admin reset-2fa
+curl -L https://raw.githubusercontent.com/huizhang556/dujiao-next-erkai/develop/config.yml.example \
+  -o ./config/config.yml
+ls -l ./config/config.yml
 ```
 
-## Frontend Notes
-
-Two independent SPAs, both built with Vite and embedded at release time.
-
-**Mount points.** The storefront is served at `/`; the admin panel at `web.admin_path`
-(default `/admin`). `/api`, `/uploads`, and `/health` are reserved prefixes — an unmatched
-path under them returns 404 instead of falling through to the SPA shell. Adding a new
-top-level backend prefix means updating `reservedPaths` in `internal/web/handler.go`.
-
-**The admin base path is resolved at runtime, not at build time.** Since `web.admin_path` is
-configurable, `pnpm run build:fullstack` only injects a `<base href="__DJ_ADMIN_BASE__/">`
-placeholder, which the server rewrites on startup. Consequences for admin code:
-
-- native `<a href>` and `window.location` navigation must go through `adminUrl()` in
-  `src/utils/adminBase.ts`
-- `<router-link :to>` and `router.push()` must **not** — vue-router already carries the base,
-  and prefixing again yields `/admin/admin/...`
-
-**Storefront templates.** The customer frontend ships more than one look, selected by the
-`storefront_template` site setting (`classic`, `vault`). Template pages live in
-`src/templates/<name>/` and fall back to `src/views/` when a page has no template-specific
-version; see `src/templates/registry.ts`. Append `?template=vault` to preview one locally.
-
-**i18n.** Both frontends and all API responses are localized — Simplified Chinese, Traditional
-Chinese, and English. Do not hard-code user-facing strings on either side.
-
-## Quick Start (Deploy)
-
-### Official one-click installer (Ubuntu / Debian)
-
-On a fresh Ubuntu 22.04+ or Debian 12+ server, download and run the official
-interactive installer:
+### 3. 修改 config.yml
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dujiao-next/dujiao-next/main/scripts/dujiao-next-manager.sh \
-  -o /tmp/dujiao-next-manager.sh
-sudo bash /tmp/dujiao-next-manager.sh install
+nano ./config/config.yml
 ```
 
-The installer deploys the release binary with systemd, an isolated local Redis,
-Nginx, SQLite, and a Let's Encrypt certificate. After installation, reopen the
-management menu with:
+分别执行三次，生成三个不同的运行时密钥：
 
 ```bash
-sudo dujiao-next-manager
+openssl rand -hex 32
 ```
 
-Common automation-friendly commands are also available:
+填入：
+
+```yaml
+app:
+  secret_key: 修改为第一个随机密钥
+
+jwt:
+  secret: 修改为第二个随机密钥
+
+user_jwt:
+  secret: 修改为第三个随机密钥
+```
+
+修改后台入口路径：
+
+```yaml
+web:
+  admin_path: "/admin_zhanghui"
+```
+
+配置 PostgreSQL：
+
+```yaml
+database:
+  driver: postgres
+  dsn: host=postgres user=dujiao password=dujiao_pass dbname=dujiao_next port=5432 sslmode=disable TimeZone=Asia/Shanghai
+  pool:
+    max_open_conns: 50
+    max_idle_conns: 10
+    conn_max_lifetime_seconds: 1800
+    conn_max_idle_time_seconds: 600
+```
+
+配置 Redis 和任务队列：
+
+```yaml
+redis:
+  enabled: true
+  host: redis
+  port: 6379
+  password: "db_redis_20260922"
+
+queue:
+  enabled: true
+  host: redis
+  port: 6379
+  password: "db_redis_20260922"
+  concurrency: 10
+  queues:
+    default: 10
+    critical: 5
+```
+
+`host` 必须使用 Compose 服务名 `postgres`、`redis`，不要填写 `127.0.0.1`。密码必须和 `.env` 保持一致。
+
+配置生产模式和首次管理员账号：
+
+```yaml
+server:
+  mode: release
+
+bootstrap:
+  default_admin_username: "zhanghui"
+  default_admin_password: "Zhang8020@@"
+```
+
+请修改示例账号密码。首次初始化成功后，建议删除或清空 `bootstrap` 中的账号密码配置。
+
+保存并退出 nano：`Ctrl + O`，回车；`Ctrl + X`。
+
+### 4. 创建 .env
 
 ```bash
-sudo dujiao-next-manager status
-sudo dujiao-next-manager logs app
-sudo dujiao-next-manager restart
-sudo dujiao-next-manager configure-domain
-sudo dujiao-next-manager configure-admin-path
-sudo dujiao-next-manager renew-cert
-sudo dujiao-next-manager admin-reset-password
-sudo dujiao-next-manager admin-reset-2fa
-sudo dujiao-next-manager uninstall
+cd /opt/dujiao-next-erkai
+nano .env
 ```
 
-The first release supports a single non-wildcard domain on Ubuntu/Debian only.
-It does not adopt an existing manual installation. If SMTP is skipped, configure
-it in the admin panel before enabling email-verification registration. Application
-data lives in `/opt/dujiao-next`; installer state is stored in
-`/etc/dujiao-next/install-state.json`. TLS failures leave only the ACME challenge
-endpoint enabled, and `install` can be rerun after DNS or firewall repair. Safe
-uninstall creates and verifies a `0600` recovery archive under
-`/var/backups/dujiao-next` before deleting managed data.
+填入以下内容，并修改为自己的密码：
 
-### Manual binary installation
+```dotenv
+TAG=latest
+TZ=Asia/Shanghai
+APP_PORT=8899
 
-Download the latest `dujiao-next_*.tar.gz` from [Releases](https://github.com/dujiao-next/dujiao-next/releases):
+DJ_DEFAULT_ADMIN_USERNAME=zhanghui
+DJ_DEFAULT_ADMIN_PASSWORD=Zhang8020@@
+
+REDIS_PASSWORD=db_redis_20260922
+
+POSTGRES_DB=dujiao_next
+POSTGRES_USER=dujiao
+POSTGRES_PASSWORD=dujiao_pass
+```
+
+`.env` 包含数据库密码和管理员密码，不要提交到 Git 或公开给其他人。
+
+### 5. 创建 docker-compose.postgres.yml
 
 ```bash
-tar -xzf dujiao-next_*.tar.gz
-cp config.yml.example config.yml
-# edit config.yml: set jwt.secret, user_jwt.secret, and web.admin_path
-./dujiao-next
+nano /opt/dujiao-next-erkai/docker-compose.postgres.yml
 ```
 
-Full instructions: https://dujiao-next.com/deploy/
+填入：
 
-Or with Docker:
+```yaml
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: dujiaonext-redis
+    restart: unless-stopped
+    command: ["redis-server", "--dir", "/data", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    volumes:
+      - ./data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks:
+      - dujiao-net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: dujiaonext-postgres
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - dujiao-net
+
+  dujiao-next:
+    image: litehub/dujiao-next-erkai:${TAG}
+    container_name: dujiao-next
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      DJ_DEFAULT_ADMIN_USERNAME: ${DJ_DEFAULT_ADMIN_USERNAME}
+      DJ_DEFAULT_ADMIN_PASSWORD: ${DJ_DEFAULT_ADMIN_PASSWORD}
+    ports:
+      - "127.0.0.1:${APP_PORT}:8080"
+    volumes:
+      - ./config/config.yml:/app/config.yml:ro
+      - ./data/uploads:/app/uploads
+      - ./data/logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks:
+      - dujiao-net
+
+networks:
+  dujiao-net:
+    driver: bridge
+```
+
+保存并退出 nano：`Ctrl + O`，回车；`Ctrl + X`。
+
+### 6. 配置 Nginx HTTPS 反向代理
+
+前台、后台、API、上传文件、`sitemap.xml` 和 `robots.txt` 都由同一个应用端口提供，Nginx 只需要代理一个域名的 `/` 路径：
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name shop.example.com;
+
+    ssl_certificate     /path/to/fullchain.pem;
+    ssl_certificate_key /path/to/privkey.pem;
+    client_max_body_size 50m;
+
+    location / {
+        proxy_pass http://127.0.0.1:8899;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+检查并重新加载：
 
 ```bash
-docker run -d -p 8080:8080 -v $PWD/config.yml:/app/config.yml:ro dujiaonext/dujiao-next:latest
+nginx -t
+systemctl reload nginx
 ```
 
-## Quick Start (Develop)
+访问地址：
 
-Run the backend and the two frontends separately for hot reload:
+```text
+用户前台：https://shop.example.com
+管理后台：https://shop.example.com/admin_zhanghui
+```
+
+### 7. 启动和运维命令
+
+以下命令必须在 `/opt/dujiao-next-erkai` 目录执行，并同时指定 `.env` 和 Compose 文件。
+
+启动：
 
 ```bash
-go mod tidy && go run ./cmd/server   # :8080 — API only, no SPAs mounted
-
-cd frontend/user  && pnpm install && pnpm run dev   # :5173
-cd frontend/admin && pnpm install && pnpm run dev   # :5174
+cd /opt/dujiao-next-erkai
+docker compose --env-file .env -f docker-compose.postgres.yml up -d
 ```
 
-Both dev servers proxy `/api`, `/uploads`, `/sitemap.xml`, and `/robots.txt` to
-`localhost:8080`. In production everything is same-origin, so these proxies are a
-development-only concern.
-
-> Use `pnpm` via corepack. `pnpm --dir X` does not read the `packageManager` field of the
-> target directory and will pick the wrong version — `cd` into the package first.
-
-## Building the Full-Stack Binary
+查看状态：
 
 ```bash
-goreleaser build --snapshot --single-target --clean
+docker compose --env-file .env -f docker-compose.postgres.yml ps
 ```
 
-This builds both frontends, embeds them, and compiles with `-tags fullstack` — the same path
-CI uses for releases. The manual equivalent:
+确认三个服务均为 `healthy`。查看应用容器日志：
 
 ```bash
-(cd frontend/admin && pnpm run build:fullstack)   # injects the <base> placeholder
-(cd frontend/user  && pnpm run build)
-rm -rf internal/web/dist && mkdir -p internal/web/dist
-cp -r frontend/admin/dist internal/web/dist/admin
-cp -r frontend/user/dist  internal/web/dist/user
-go build -tags release,fullstack -o dujiao-next ./cmd/server
+docker compose --env-file .env -f docker-compose.postgres.yml logs -f dujiao-next
 ```
 
-Note that admin uses `build:fullstack`, not `build`. Plain `build` produces a bundle pinned to
-`/`, which silently breaks a custom `web.admin_path`.
+应用服务日志位于：
 
-## Testing
+```text
+/opt/dujiao-next-erkai/data/logs/app.log
+```
+
+停止服务：
 
 ```bash
-go test ./...                              # full suite
-go test ./internal/architecture/...        # dependency and layering guards
-go test ./internal/modules/order/...       # one module
-
-cd frontend/user  && pnpm run build        # includes vue-tsc type checking
-cd frontend/admin && pnpm run build
+docker compose --env-file .env -f docker-compose.postgres.yml down
 ```
 
-Health check endpoint: `GET /health`
+该命令不会删除 `data/` 下的数据库、Redis、上传文件和日志。
 
-## Notes on Data Access
+### 8. 更新、升级和回滚
 
-SQLite runs with `MaxOpenConns=1`. A store opens a transaction through
-`WithinTransaction(func(tx contract.Transaction) error)`, and every query inside the closure
-must go through that `tx` handle or a store bound to it via `WithTx(tx)`. Reaching for the
-global DB handle instead asks for a second connection that will never be granted, deadlocking
-the process — including indirectly, by calling a service that queries on its own. Read any
-settings you need *before* opening the transaction, and keep outbound HTTP calls (payment
-gateways and the like) outside it.
+更新 `latest`：
 
-## Online Documentation
+```bash
+cd /opt/dujiao-next-erkai
+docker compose --env-file .env -f docker-compose.postgres.yml down
+docker compose --env-file .env -f docker-compose.postgres.yml pull
+docker compose --env-file .env -f docker-compose.postgres.yml up -d
+```
 
-- https://dujiao-next.com
+前端随应用镜像一起更新，不需要单独操作。
+
+升级到指定版本：
+
+```bash
+nano .env
+```
+
+将版本改为具体标签，例如：
+
+```dotenv
+TAG=1.5.4-1
+```
+
+执行：
+
+```bash
+docker compose --env-file .env -f docker-compose.postgres.yml pull
+docker compose --env-file .env -f docker-compose.postgres.yml up -d
+```
+
+回滚时，将 `TAG` 改回历史版本，再执行上面的 `pull` 和 `up -d` 命令。涉及数据库结构变化的版本回滚前，请先备份 PostgreSQL 数据。
+
+### 9. 卸载
+
+确认已备份数据库、上传文件和日志后，停止并删除容器、网络、数据卷和镜像：
+
+```bash
+cd /opt/dujiao-next-erkai
+docker compose --env-file .env -f docker-compose.postgres.yml down \
+  --volumes --rmi all --remove-orphans
+```
+
+参数说明：
+
+- `down`：停止并删除 Compose 创建的容器和网络；
+- `--volumes`：删除 Compose 管理的数据卷；
+- `--rmi all`：删除该 Compose 文件使用的镜像；
+- `--remove-orphans`：删除同一 Compose 项目中的遗留容器。
+
+本教程使用主机目录挂载，`--volumes` 不会删除 `/opt/dujiao-next-erkai/data/` 下的数据。确认不再需要数据后，再手动删除部署目录：
+
+```bash
+rm -rf /opt/dujiao-next-erkai
+```
+
+检查是否还有相关容器和镜像：
+
+```bash
+docker ps -a
+docker images
+```
+
+确认无用后删除：
+
+```bash
+docker rm -f 容器名或容器ID
+docker rmi 镜像ID
+```
+
+## 当前镜像标签
+
+```text
+litehub/dujiao-next-erkai:latest
+litehub/dujiao-next-erkai:1.5.4-1
+```

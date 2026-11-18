@@ -7,54 +7,27 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	urlpkg "net/url"
 	"regexp"
 	"strings"
 	"time"
 )
 
 const (
-	// repoOwner GitHub 仓库所有者，用于检测最新发布版本
-	repoOwner = "dujiao-next"
-	// repoName GitHub 仓库名称
-	repoName = "dujiao-next"
-
-	githubAPIBaseURL = "https://api.github.com"
-	releaseUserAgent = "dujiao-next-update-checker"
+	dockerHubRepository = "litehub/dujiao-next-erkai"
+	dockerHubAPIURL     = "https://hub.docker.com/v2/repositories/litehub/dujiao-next-erkai/tags?page_size=100"
+	dockerHubURL        = "https://hub.docker.com/r/litehub/dujiao-next-erkai"
+	releaseUserAgent    = "dujiao-next-docker-update-checker"
 )
 
-// releasePayload GitHub Releases API 响应中本检测器关心的字段
-type releasePayload struct {
-	TagName     string         `json:"tag_name"`
-	Name        string         `json:"name"`
-	HTMLURL     string         `json:"html_url"`
-	Body        string         `json:"body"`
-	Draft       bool           `json:"draft"`
-	Prerelease  bool           `json:"prerelease"`
-	PublishedAt time.Time      `json:"published_at"`
-	Assets      []assetPayload `json:"assets"`
+type dockerHubTagsPayload struct {
+	Next    string             `json:"next"`
+	Results []dockerHubTagItem `json:"results"`
 }
 
-type assetPayload struct {
-	Name               string `json:"name"`
-	BrowserDownloadURL string `json:"browser_download_url"`
-	Size               int64  `json:"size"`
-}
-
-// Asset 发行版附件（goreleaser 产出的平台归档与 checksums.txt）
-type Asset struct {
-	Name        string `json:"name"`
-	DownloadURL string `json:"download_url"`
-	Size        int64  `json:"size"`
-}
-
-// Release GitHub 最新发行版的完整信息，供版本检测与一键升级共用
-type Release struct {
-	TagName     string
-	Name        string
-	HTMLURL     string
-	Body        string
-	PublishedAt time.Time
-	Assets      []Asset
+type dockerHubTagItem struct {
+	Name        string    `json:"name"`
+	LastUpdated time.Time `json:"last_updated"`
 }
 
 // CheckResult 检测结果，已包含当前与最新版本以及是否需要更新
@@ -69,19 +42,23 @@ type CheckResult struct {
 	Source         string     `json:"source"`
 }
 
-// ErrRateLimited 触发 GitHub 匿名调用速率限制时返回，便于上层映射成专用提示
-var ErrRateLimited = errors.New("github api rate limit exceeded")
+// ErrRateLimited 触发 Docker Hub 调用限流时返回，便于上层映射成专用提示。
+var ErrRateLimited = errors.New("docker hub api rate limit exceeded")
 
-// CheckLatestRelease 通过 GitHub Releases API 获取最新发行版并与当前版本比较。
-// 仓库地址固定为 dujiao-next/dujiao-next，不接受外部传入，避免 SSRF。
+// CheckLatestRelease 查询 Docker Hub 上本项目的具体版本标签并与当前版本比较。
 func CheckLatestRelease(ctx context.Context) (*CheckResult, error) {
-	release, err := FetchLatestRelease(ctx)
+	tags, err := FetchDockerHubTags(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	current := strings.TrimSpace(Version)
-	latest := strings.TrimSpace(release.TagName)
+	latestTag, found := latestDockerHubTag(tags)
+	if !found {
+		return nil, fmt.Errorf("no valid version tags found for %s", dockerHubRepository)
+	}
+
+	latest := strings.TrimSpace(latestTag.Name)
 	hasUpdate, compareErr := IsNewerVersion(latest, current)
 	if compareErr != nil {
 		return nil, fmt.Errorf("compare latest version %q with current %q: %w", latest, current, compareErr)
@@ -91,71 +68,79 @@ func CheckLatestRelease(ctx context.Context) (*CheckResult, error) {
 		CurrentVersion: current,
 		LatestVersion:  latest,
 		HasUpdate:      hasUpdate,
-		ReleaseURL:     release.HTMLURL,
-		ReleaseName:    release.Name,
-		ReleaseNotes:   release.Body,
-		Source:         fmt.Sprintf("https://github.com/%s/%s/releases", repoOwner, repoName),
+		ReleaseURL:     dockerHubURL,
+		ReleaseName:    latest,
+		Source:         dockerHubURL,
 	}
-	if !release.PublishedAt.IsZero() {
-		t := release.PublishedAt
+	if !latestTag.LastUpdated.IsZero() {
+		t := latestTag.LastUpdated
 		result.PublishedAt = &t
 	}
 	return result, nil
 }
 
-// FetchLatestRelease 拉取最新发行版原始信息（含附件列表），供一键升级下载对应平台归档。
-func FetchLatestRelease(ctx context.Context) (*Release, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/releases/latest", githubAPIBaseURL, repoOwner, repoName)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+func latestDockerHubTag(tags []dockerHubTagItem) (dockerHubTagItem, bool) {
+	var latestTag dockerHubTagItem
+	var latestSemver semver
+	found := false
+	for _, tag := range tags {
+		name := strings.TrimSpace(tag.Name)
+		if name == "" || name == "latest" || name == "dev" {
+			continue
+		}
+		parsed, parseErr := parseSemver(name)
+		if parseErr != nil {
+			continue
+		}
+		if !found || compareSemver(parsed, latestSemver) > 0 {
+			latestTag = tag
+			latestSemver = parsed
+			found = true
+		}
 	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", releaseUserAgent)
-	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	return latestTag, found
+}
 
+// FetchDockerHubTags 拉取 Docker Hub 标签，支持 API 分页。
+func FetchDockerHubTags(ctx context.Context) ([]dockerHubTagItem, error) {
+	url := dockerHubAPIURL
+	var tags []dockerHubTagItem
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("request github api: %w", err)
+	for page := 0; url != "" && page < 10; page++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("create request: %w", err)
+		}
+		req.Header.Set("User-Agent", releaseUserAgent)
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("request docker hub api: %w", err)
+		}
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		resp.Body.Close()
+		if readErr != nil {
+			return nil, fmt.Errorf("read response: %w", readErr)
+		}
+		if resp.StatusCode == http.StatusTooManyRequests {
+			return nil, ErrRateLimited
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return nil, fmt.Errorf("docker hub api returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		}
+		var payload dockerHubTagsPayload
+		if err := json.Unmarshal(body, &payload); err != nil {
+			return nil, fmt.Errorf("decode docker hub tags: %w", err)
+		}
+		tags = append(tags, payload.Results...)
+		url = payload.Next
+		if url != "" {
+			nextURL, parseErr := urlpkg.Parse(url)
+			if parseErr != nil || nextURL.Scheme != "https" || nextURL.Host != "hub.docker.com" {
+				return nil, errors.New("docker hub api returned an invalid pagination URL")
+			}
+		}
 	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
-
-	if resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0" {
-		return nil, ErrRateLimited
-	}
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("github release not found for %s/%s", repoOwner, repoName)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("github api returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-
-	var payload releasePayload
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, fmt.Errorf("decode release: %w", err)
-	}
-
-	release := &Release{
-		TagName:     strings.TrimSpace(payload.TagName),
-		Name:        payload.Name,
-		HTMLURL:     payload.HTMLURL,
-		Body:        payload.Body,
-		PublishedAt: payload.PublishedAt,
-	}
-	for _, a := range payload.Assets {
-		release.Assets = append(release.Assets, Asset{
-			Name:        a.Name,
-			DownloadURL: a.BrowserDownloadURL,
-			Size:        a.Size,
-		})
-	}
-	return release, nil
+	return tags, nil
 }
 
 // semver 一个解析后的版本号。prerelease 为空表示正式版。
