@@ -233,8 +233,8 @@ func TestUpdateSiteSettingNormalized(t *testing.T) {
 	if contact["telegram"] != "https://t.me/demo" {
 		t.Fatalf("unexpected telegram: %v", contact["telegram"])
 	}
-	if contact["whatsapp"] != "" {
-		t.Fatalf("unexpected whatsapp: %v", contact["whatsapp"])
+	if _, exists := contact["whatsapp"]; exists {
+		t.Fatalf("whatsapp must not be exposed: %v", contact["whatsapp"])
 	}
 
 	seo, ok := result["seo"].(map[string]interface{})
@@ -723,8 +723,15 @@ func TestUpdateSiteSettingValidatesContactLinks(t *testing.T) {
 		contact map[string]interface{}
 		field   string
 	}{
-		{map[string]interface{}{"whatsapp": "https://example.com/logo.png"}, "contact_whatsapp"},
 		{map[string]interface{}{"telegram": "javascript:alert(1)"}, "contact_telegram"},
+		{map[string]interface{}{"custom": []interface{}{map[string]interface{}{"name": "", "url": "https://example.com"}}}, "contact_custom"},
+		{map[string]interface{}{"custom": []interface{}{map[string]interface{}{"name": "客服", "url": "javascript:alert(1)"}}}, "contact_custom"},
+		{map[string]interface{}{"custom": []interface{}{
+			map[string]interface{}{"name": "一", "url": "https://example.com/1"},
+			map[string]interface{}{"name": "二", "url": "https://example.com/2"},
+			map[string]interface{}{"name": "三", "url": "https://example.com/3"},
+			map[string]interface{}{"name": "四", "url": "https://example.com/4"},
+		}}, "contact_custom"},
 	}
 	for _, tc := range cases {
 		_, err := svc.Update(constants.SettingKeySiteConfig, map[string]interface{}{"contact": tc.contact})
@@ -738,7 +745,14 @@ func TestUpdateSiteSettingValidatesContactLinks(t *testing.T) {
 	}
 
 	if _, err := svc.Update(constants.SettingKeySiteConfig, map[string]interface{}{
-		"contact": map[string]interface{}{"telegram": "https://t.me/shop", "whatsapp": "https://wa.me/1234567890"},
+		"contact": map[string]interface{}{
+			"telegram": "https://t.me/shop",
+			"whatsapp": "https://wa.me/legacy",
+			"custom": []interface{}{
+				map[string]interface{}{"name": "客服", "url": "https://example.com/support"},
+				map[string]interface{}{"name": "邮件", "url": "mailto:support@example.com"},
+			},
+		},
 	}); err != nil {
 		t.Fatalf("valid contact links rejected: %v", err)
 	}

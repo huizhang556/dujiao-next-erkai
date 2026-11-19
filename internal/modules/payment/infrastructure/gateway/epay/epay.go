@@ -26,6 +26,8 @@ import (
 
 	"github.com/dujiao-next/internal/constants"
 	"github.com/dujiao-next/internal/modules/payment/infrastructure/gateway/common"
+	"github.com/dujiao-next/internal/shared/money"
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -58,18 +60,22 @@ var (
 // Config 易支付配置
 type Config struct {
 	common.ExchangeRateConfig
-	GatewayURL  string `json:"gateway_url"`         // 网关地址
-	EpayVersion string `json:"epay_version"`        // 版本（v1/v2）
-	MerchantID  string `json:"merchant_id"`         // 商户号
-	MerchantKey string `json:"merchant_key"`        // 商户密钥（v1）
-	PrivateKey  string `json:"private_key"`         // 商户私钥（v2）
-	PublicKey   string `json:"platform_public_key"` // 平台公钥（v2）
-	SignType    string `json:"sign_type"`           // 签名类型
-	APIPath     string `json:"api_path"`            // 接口路径
-	NotifyURL   string `json:"notify_url"`          // 异步通知地址
-	ReturnURL   string `json:"return_url"`          // 同步跳转地址
-	Method      string `json:"method"`              // 支付方式（v2 method）
-	Device      string `json:"device"`              // 设备类型（v1 device）
+	GatewayURL          string `json:"gateway_url"`         // 网关地址
+	EpayVersion         string `json:"epay_version"`        // 版本（v1/v2）
+	MerchantID          string `json:"merchant_id"`         // 商户号
+	MerchantKey         string `json:"merchant_key"`        // 商户密钥（v1）
+	PrivateKey          string `json:"private_key"`         // 商户私钥（v2）
+	PublicKey           string `json:"platform_public_key"` // 平台公钥（v2）
+	SignType            string `json:"sign_type"`           // 签名类型
+	APIPath             string `json:"api_path"`            // 接口路径
+	NotifyURL           string `json:"notify_url"`          // 异步通知地址
+	ReturnURL           string `json:"return_url"`          // 同步跳转地址
+	Method              string `json:"method"`              // 支付方式（v2 method）
+	Device              string `json:"device"`              // 设备类型（v1 device）
+	QueryEnabled        bool   `json:"query_enabled"`
+	QueryProvider       string `json:"query_provider"`
+	QueryURL            string `json:"query_url"`
+	QueryTimeoutSeconds int    `json:"query_timeout_seconds"`
 }
 
 // CreateInput 易支付下单输入
@@ -127,7 +133,31 @@ func ValidateConfig(cfg *Config) error {
 			return fmt.Errorf("%w: merchant_key is required for v1", ErrConfigInvalid)
 		}
 	}
+	if cfg.QueryEnabled {
+		if cfg.EpayVersion != VersionV1 || strings.TrimSpace(cfg.QueryProvider) != "zpay_v1" {
+			return fmt.Errorf("%w: query confirmation currently supports zpay_v1 only", ErrConfigInvalid)
+		}
+		if _, err := queryEndpoint(cfg); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+func queryEndpoint(cfg *Config) (string, error) {
+	endpoint := strings.TrimSpace(cfg.QueryURL)
+	if endpoint == "" {
+		endpoint = strings.TrimRight(strings.TrimSpace(cfg.GatewayURL), "/") + "/api.php"
+	}
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
+		return "", fmt.Errorf("%w: query_url must be an https URL", ErrConfigInvalid)
+	}
+	host := strings.ToLower(u.Hostname())
+	if host == "localhost" || host == "127.0.0.1" || host == "::1" || strings.HasSuffix(host, ".local") {
+		return "", fmt.Errorf("%w: query_url cannot target a local host", ErrConfigInvalid)
+	}
+	return endpoint, nil
 }
 
 // CreatePayment 发起易支付
@@ -185,6 +215,119 @@ func BuildRedirectURL(cfg *Config, input CreateInput) (*CreateResult, error) {
 		return buildRedirectV2(cfg, input, payType)
 	default:
 		return buildRedirectV1(cfg, input, payType)
+	}
+}
+
+// QueryZPayOrder queries a ZPAY V1 order without changing local payment state.
+func QueryZPayOrder(ctx context.Context, cfg *Config, orderNo string) (*QueryResult, error) {
+	if cfg == nil || cfg.EpayVersion != VersionV1 || strings.TrimSpace(cfg.MerchantID) == "" || strings.TrimSpace(cfg.MerchantKey) == "" || strings.TrimSpace(orderNo) == "" {
+		return nil, ErrConfigInvalid
+	}
+	endpoint, err := queryEndpoint(cfg)
+	if err != nil {
+		return nil, err
+	}
+	params := url.Values{}
+	params.Set("act", "order")
+	params.Set("pid", strings.TrimSpace(cfg.MerchantID))
+	params.Set("key", strings.TrimSpace(cfg.MerchantKey))
+	params.Set("out_trade_no", strings.TrimSpace(orderNo))
+	requestURL, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, ErrConfigInvalid
+	}
+	query := requestURL.Query()
+	for key, values := range params {
+		query[key] = values
+	}
+	requestURL.RawQuery = query.Encode()
+	timeout := 5 * time.Second
+	if cfg.QueryTimeoutSeconds > 0 && cfg.QueryTimeoutSeconds <= 30 {
+		timeout = time.Duration(cfg.QueryTimeoutSeconds) * time.Second
+	}
+	requestCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(requestCtx, http.MethodGet, requestURL.String(), nil)
+	if err != nil {
+		return nil, ErrRequestFailed
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := (&http.Client{Timeout: timeout}).Do(req)
+	if err != nil {
+		return nil, ErrRequestFailed
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, ErrRequestFailed
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return nil, ErrRequestFailed
+	}
+	body, err = normalizeResponseBody(body)
+	if err != nil {
+		return nil, ErrResponseInvalid
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return nil, ErrResponseInvalid
+	}
+	code := intFromRaw(raw["code"])
+	status := intFromRaw(raw["status"])
+	amountText := strings.TrimSpace(stringFromRaw(raw["money"]))
+	amount := money.Amount{}
+	if amountText != "" {
+		d, parseErr := decimal.NewFromString(amountText)
+		if parseErr != nil {
+			return nil, ErrResponseInvalid
+		}
+		amount = money.FromDecimal(d)
+	}
+	result := &QueryResult{
+		OrderNo:     strings.TrimSpace(stringFromRaw(raw["out_trade_no"])),
+		ProviderRef: strings.TrimSpace(stringFromRaw(raw["trade_no"])),
+		MerchantID:  strings.TrimSpace(stringFromRaw(raw["pid"])),
+		ChannelType: strings.TrimSpace(stringFromRaw(raw["type"])),
+		Status:      status,
+		Code:        code,
+		Amount:      amount,
+		Raw:         raw,
+	}
+	if value := strings.TrimSpace(stringFromRaw(raw["endtime"])); value != "" {
+		if parsed, parseErr := time.ParseInLocation("2006-01-02 15:04:05", value, time.Local); parseErr == nil {
+			result.PaidAt = &parsed
+		}
+	}
+	return result, nil
+}
+
+type QueryResult struct {
+	OrderNo     string
+	ProviderRef string
+	MerchantID  string
+	ChannelType string
+	Status      int
+	Code        int
+	Amount      money.Amount
+	PaidAt      *time.Time
+	Raw         map[string]interface{}
+}
+
+func stringFromRaw(value interface{}) string {
+	return strings.TrimSpace(fmt.Sprint(value))
+}
+
+func intFromRaw(value interface{}) int {
+	switch typed := value.(type) {
+	case float64:
+		return int(typed)
+	case int:
+		return typed
+	case string:
+		parsed, _ := strconv.Atoi(strings.TrimSpace(typed))
+		return parsed
+	default:
+		return 0
 	}
 }
 

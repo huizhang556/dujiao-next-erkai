@@ -130,6 +130,11 @@ func (a adminChannelCatalogAdapter) TestChannelSecurity(ctx context.Context, id 
 	return result, mapTransportError(err)
 }
 
+func (a adminChannelCatalogAdapter) TestPaymentQuery(ctx context.Context, id uint, orderNo string) (*paymentcontract.GatewayQueryTestResult, error) {
+	result, err := a.payments.TestPaymentQuery(ctx, id, orderNo)
+	return result, mapTransportError(err)
+}
+
 type webhookServiceAdapter struct {
 	payments *paymentapp.PaymentService
 }

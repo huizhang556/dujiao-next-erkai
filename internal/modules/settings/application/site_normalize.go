@@ -2,6 +2,8 @@ package settingsapp
 
 import (
 	settingsvalue "github.com/dujiao-next/internal/modules/settings/schema/value"
+	"net/mail"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -21,6 +23,10 @@ const (
 	settingSiteFooterLinksMaxCount       = 20
 	settingSiteFooterLinkNameMaxRuneSize = 120
 	settingSiteFooterLinkURLMaxRuneSize  = 2000
+	settingSiteContactMaxCount           = 4
+	settingSiteCustomContactMaxCount     = settingSiteContactMaxCount - 1
+	settingSiteContactNameMaxRuneSize    = 120
+	settingSiteContactURLMaxRuneSize     = 2000
 
 	settingNavCustomItemsMaxCount        = 10
 	settingNavCustomItemTitleMaxRuneSize = 120
@@ -129,14 +135,28 @@ func normalizeSiteFooterLinks(raw interface{}) []interface{} {
 func normalizeSiteContact(raw interface{}) map[string]interface{} {
 	result := map[string]interface{}{
 		"telegram": "",
-		"whatsapp": "",
+		"custom":   make([]interface{}, 0),
 	}
 	contactMap, ok := raw.(map[string]interface{})
 	if !ok {
 		return result
 	}
 	result["telegram"] = normalizeSettingText(contactMap["telegram"])
-	result["whatsapp"] = normalizeSettingText(contactMap["whatsapp"])
+	customRaw, _ := contactMap["custom"].([]interface{})
+	custom := make([]interface{}, 0, settingSiteCustomContactMaxCount)
+	for _, itemRaw := range customRaw {
+		itemMap, ok := itemRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name := normalizeSettingTextWithRuneLimit(itemMap["name"], settingSiteContactNameMaxRuneSize)
+		urlValue := normalizeSettingTextWithRuneLimit(itemMap["url"], settingSiteContactURLMaxRuneSize)
+		if name == "" && urlValue == "" {
+			continue
+		}
+		custom = append(custom, map[string]interface{}{"name": name, "url": urlValue})
+	}
+	result["custom"] = custom
 	return result
 }
 
@@ -155,10 +175,44 @@ func validateSiteSetting(value jsonmap.JSON) error {
 	if telegram, _ := contact["telegram"].(string); telegram != "" && !contactlink.IsTelegram(telegram) {
 		return &SettingFieldError{Field: "contact_telegram"}
 	}
-	if whatsApp, _ := contact["whatsapp"].(string); whatsApp != "" && !contactlink.IsWhatsApp(whatsApp) {
-		return &SettingFieldError{Field: "contact_whatsapp"}
+	customRaw, ok := contact["custom"].([]interface{})
+	if !ok {
+		return nil
+	}
+	if len(customRaw) > settingSiteCustomContactMaxCount {
+		return &SettingFieldError{Field: "contact_custom"}
+	}
+	for _, itemRaw := range customRaw {
+		item, ok := itemRaw.(map[string]interface{})
+		if !ok {
+			return &SettingFieldError{Field: "contact_custom"}
+		}
+		name := normalizeSettingTextWithRuneLimit(item["name"], settingSiteContactNameMaxRuneSize)
+		urlValue := normalizeSettingTextWithRuneLimit(item["url"], settingSiteContactURLMaxRuneSize)
+		if name == "" || urlValue == "" || !isValidSiteContactURL(urlValue) {
+			return &SettingFieldError{Field: "contact_custom"}
+		}
 	}
 	return nil
+}
+
+func isValidSiteContactURL(raw string) bool {
+	value := strings.TrimSpace(raw)
+	if value == "" || strings.HasPrefix(value, "javascript:") || strings.HasPrefix(value, "data:") {
+		return false
+	}
+	if strings.HasPrefix(value, "tg://") {
+		return true
+	}
+	if strings.HasPrefix(value, "mailto:") {
+		_, err := mail.ParseAddress(strings.TrimPrefix(value, "mailto:"))
+		return err == nil
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Host == "" {
+		return false
+	}
+	return parsed.Scheme == "http" || parsed.Scheme == "https"
 }
 
 func normalizeSiteBrand(raw interface{}) map[string]interface{} {

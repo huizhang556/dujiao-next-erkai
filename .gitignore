@@ -1,5 +1,7 @@
 .vscode/
 config.yml
+config/config.yml
+data/
 dev-guid.txt
 .idea
 db

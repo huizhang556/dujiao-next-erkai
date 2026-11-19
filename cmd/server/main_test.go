@@ -38,12 +38,17 @@ func TestWriteStartupBannerOmitsRetiredFrontendRepositories(t *testing.T) {
 		}
 	}
 
-	// 用整 token 相等比较：组织地址是主仓地址的前缀，子串匹配挡不住"只剩主仓"的退化。
+	if !strings.Contains(banner, "███████╗██████╗ ██╗  ██╗ █████╗ ██╗") {
+		t.Fatal("startup banner is missing the二开项目 logo")
+	}
+	if !strings.Contains(banner, "本项目 dujiao-next-erkai 是基于原作者项目的二次开发版本") {
+		t.Fatal("startup banner is missing the personal-use disclaimer")
+	}
+
 	links := bannerLinks(banner)
 	for _, retained := range []string{
-		"https://github.com/dujiao-next",
+		"https://github.com/huizhang556/dujiao-next-erkai",
 		"https://github.com/dujiao-next/dujiao-next",
-		"https://dujiao-next.com",
 	} {
 		if !slices.Contains(links, retained) {
 			t.Errorf("startup banner is missing retained repository: %s (got %v)", retained, links)

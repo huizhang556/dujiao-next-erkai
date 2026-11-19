@@ -16,7 +16,7 @@ import (
 const (
 	dockerHubRepository = "litehub/dujiao-next-erkai"
 	dockerHubAPIURL     = "https://hub.docker.com/v2/repositories/litehub/dujiao-next-erkai/tags?page_size=100"
-	dockerHubURL        = "https://hub.docker.com/r/litehub/dujiao-next-erkai"
+	releaseURL          = "https://github.com/huizhang556/dujiao-next-erkai/releases"
 	releaseUserAgent    = "dujiao-next-docker-update-checker"
 )
 
@@ -68,9 +68,9 @@ func CheckLatestRelease(ctx context.Context) (*CheckResult, error) {
 		CurrentVersion: current,
 		LatestVersion:  latest,
 		HasUpdate:      hasUpdate,
-		ReleaseURL:     dockerHubURL,
+		ReleaseURL:     releaseURL,
 		ReleaseName:    latest,
-		Source:         dockerHubURL,
+		Source:         dockerHubRepository,
 	}
 	if !latestTag.LastUpdated.IsZero() {
 		t := latestTag.LastUpdated

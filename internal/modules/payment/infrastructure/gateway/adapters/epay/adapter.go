@@ -23,9 +23,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// epayAdapter 是 epay 网关的 paymentcontract.GatewayProvider + paymentcontract.GatewayCallbackVerifier 实现。
-// epay 没有主动查询 API，callback 是同步 form POST（不是 JSON webhook），
-// 所以**不**实现 paymentcontract.GatewayCapturer 和 paymentcontract.GatewayWebhooker。
+// epayAdapter implements the payment provider, callback verifier, and optional query capability.
 type epayAdapter struct{}
 
 // NewEpayAdapter 实例化 epay adapter。
@@ -35,6 +33,7 @@ func NewEpayAdapter() paymentcontract.GatewayProvider { return &epayAdapter{} }
 var (
 	_ paymentcontract.GatewayProvider         = (*epayAdapter)(nil)
 	_ paymentcontract.GatewayCallbackVerifier = (*epayAdapter)(nil)
+	_ paymentcontract.GatewayCapturer         = (*epayAdapter)(nil)
 )
 
 // Type 返回 provider 标识。
@@ -64,6 +63,38 @@ func (a *epayAdapter) ValidateConfig(raw jsonmap.JSON, channelType string) error
 	}
 	_, err := a.parseConfig(raw)
 	return err
+}
+
+func (a *epayAdapter) QueryPayment(ctx context.Context, raw jsonmap.JSON, providerRef string) (*paymentcontract.GatewayQueryResult, error) {
+	cfg, err := epay.ParseConfig(raw)
+	if err != nil {
+		return nil, mapEpayError(err)
+	}
+	if err := epay.ValidateConfig(cfg); err != nil {
+		return nil, mapEpayError(err)
+	}
+	if cfg.QueryProvider != "zpay_v1" {
+		return nil, paymentcontract.ErrGatewayUnsupportedChannel
+	}
+	result, err := epay.QueryZPayOrder(ctx, cfg, providerRef)
+	if err != nil {
+		return nil, mapEpayError(err)
+	}
+	status := constants.PaymentStatusPending
+	if result.Code == 1 && result.Status == 1 {
+		status = constants.PaymentStatusSuccess
+	}
+	payload := jsonmap.JSON(result.Raw)
+	payload["query_code"] = result.Code
+	payload["query_status"] = result.Status
+	return &paymentcontract.GatewayQueryResult{
+		ProviderRef: result.ProviderRef,
+		Status:      status,
+		Amount:      result.Amount,
+		Currency:    "CNY",
+		PaidAt:      result.PaidAt,
+		Payload:     payload,
+	}, nil
 }
 
 // CreatePayment 创建支付。双 mode dispatch：

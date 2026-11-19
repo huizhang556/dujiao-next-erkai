@@ -18,6 +18,68 @@ import (
 	walletdomain "github.com/dujiao-next/internal/modules/wallet/domain"
 )
 
+// TestPaymentQuery tests a provider query using an existing local merchant order number.
+// It never changes the payment, order, wallet, or fulfillment state.
+func (s *PaymentService) TestPaymentQuery(ctx context.Context, channelID uint, orderNo string) (*paymentcontract.GatewayQueryTestResult, error) {
+	if channelID == 0 || strings.TrimSpace(orderNo) == "" {
+		return nil, ErrPaymentInvalid
+	}
+	channel, err := s.GetChannel(channelID)
+	if err != nil {
+		return nil, err
+	}
+	payment, err := s.paymentRepo.GetByGatewayOrderNo(strings.TrimSpace(orderNo))
+	if err != nil {
+		return nil, ErrPaymentUpdateFailed
+	}
+	if payment == nil || payment.ChannelID != channelID {
+		return nil, ErrPaymentNotFound
+	}
+	if s.paymentProviderRegistry == nil {
+		return nil, ErrPaymentProviderNotSupported
+	}
+	provider, ok := s.paymentProviderRegistry.Lookup(channel.ProviderType, channel.ChannelType)
+	if !ok {
+		return nil, ErrPaymentProviderNotSupported
+	}
+	capturer, ok := provider.(paymentcontract.GatewayCapturer)
+	if !ok {
+		return nil, ErrPaymentProviderNotSupported
+	}
+	queryCtx, cancel := detachOutboundRequestContext(ctx)
+	defer cancel()
+	queryResult, err := capturer.QueryPayment(queryCtx, channel.ConfigJSON, orderNo)
+	if err != nil || queryResult == nil {
+		if err != nil {
+			return nil, mapProviderErrorToService(err)
+		}
+		return nil, ErrPaymentGatewayResponseInvalid
+	}
+	payload := queryResult.Payload
+	merchantID := configString(channel.ConfigJSON, "merchant_id")
+	endpoint := configString(channel.ConfigJSON, "query_url")
+	if endpoint == "" {
+		endpoint = strings.TrimRight(configString(channel.ConfigJSON, "gateway_url"), "/") + "/api.php"
+	}
+	queriedOrder := strings.TrimSpace(fmt.Sprint(payload["out_trade_no"]))
+	queriedMerchant := strings.TrimSpace(fmt.Sprint(payload["pid"]))
+	return &paymentcontract.GatewayQueryTestResult{
+		Provider:        "zpay_v1",
+		Endpoint:        endpoint,
+		OrderNo:         queriedOrder,
+		ProviderRef:     queryResult.ProviderRef,
+		MerchantID:      queriedMerchant,
+		Status:          queryResult.Status,
+		Paid:            queryResult.Status == constants.PaymentStatusSuccess,
+		Amount:          queryResult.Amount,
+		Currency:        queryResult.Currency,
+		ChannelType:     strings.TrimSpace(fmt.Sprint(payload["type"])),
+		AmountMatched:   queryResult.Amount.Decimal.Equal(payment.Amount.Decimal),
+		OrderMatched:    queriedOrder == strings.TrimSpace(orderNo),
+		MerchantMatched: queriedMerchant == merchantID,
+	}, nil
+}
+
 // CapturePaymentInput 捕获支付输入。
 type CapturePaymentInput struct {
 	PaymentID uint

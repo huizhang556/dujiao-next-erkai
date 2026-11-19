@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -75,7 +76,81 @@ func (s *PaymentService) HandleSyncCallback(
 		PaidAt:      result.PaidAt,
 		Payload:     payload,
 	}
+	if err := s.confirmSyncCallback(context.Background(), channel, payment, result); err != nil {
+		return nil, err
+	}
+	callbackInput.Amount = result.Amount
+	callbackInput.PaidAt = result.PaidAt
+	callbackInput.Payload = result.Payload
 	return s.HandleCallback(callbackInput)
+}
+
+func (s *PaymentService) confirmSyncCallback(ctx context.Context, channel *paymentdomain.PaymentChannel, payment *paymentdomain.Payment, result *paymentcontract.GatewayCallbackResult) error {
+	if channel == nil || payment == nil || result == nil || result.Status != constants.PaymentStatusSuccess || !queryConfirmationEnabled(channel.ConfigJSON) {
+		return nil
+	}
+	if s.paymentProviderRegistry == nil {
+		return ErrPaymentQueryNotConfirmed
+	}
+	provider, ok := s.paymentProviderRegistry.Lookup(channel.ProviderType, channel.ChannelType)
+	if !ok {
+		return ErrPaymentQueryNotConfirmed
+	}
+	capturer, ok := provider.(paymentcontract.GatewayCapturer)
+	if !ok {
+		return ErrPaymentQueryNotConfirmed
+	}
+	queryOrderNo := strings.TrimSpace(result.OrderNo)
+	if queryOrderNo == "" {
+		queryOrderNo = strings.TrimSpace(payment.GatewayOrderNo)
+	}
+	queryCtx, cancel := detachOutboundRequestContext(ctx)
+	defer cancel()
+	queryResult, err := capturer.QueryPayment(queryCtx, channel.ConfigJSON, queryOrderNo)
+	if err != nil || queryResult == nil || queryResult.Status != constants.PaymentStatusSuccess {
+		return fmt.Errorf("%w: provider query did not confirm payment", ErrPaymentQueryNotConfirmed)
+	}
+	queryPayload := queryResult.Payload
+	if !queryPayloadMatches(queryPayload, "out_trade_no", queryOrderNo) ||
+		!queryPayloadMatches(queryPayload, "pid", configString(channel.ConfigJSON, "merchant_id")) ||
+		!queryResult.Amount.Decimal.Equal(payment.Amount.Decimal) {
+		return fmt.Errorf("%w: provider query fields do not match local payment", ErrPaymentQueryNotConfirmed)
+	}
+	if queryResult.ProviderRef != "" && result.ProviderRef != "" && queryResult.ProviderRef != result.ProviderRef {
+		return fmt.Errorf("%w: provider trade number mismatch", ErrPaymentQueryNotConfirmed)
+	}
+	result.Amount = queryResult.Amount
+	result.PaidAt = queryResult.PaidAt
+	if result.Payload == nil {
+		result.Payload = jsonmap.JSON{}
+	}
+	result.Payload["query_confirmation"] = queryPayload
+	return nil
+}
+
+func queryConfirmationEnabled(raw jsonmap.JSON) bool {
+	value, ok := raw["query_enabled"]
+	if !ok {
+		return false
+	}
+	switch typed := value.(type) {
+	case bool:
+		return typed
+	case string:
+		return strings.EqualFold(strings.TrimSpace(typed), "true") || strings.TrimSpace(typed) == "1"
+	default:
+		return false
+	}
+}
+
+func configString(raw jsonmap.JSON, key string) string {
+	value, _ := raw[key].(string)
+	return strings.TrimSpace(value)
+}
+
+func queryPayloadMatches(payload jsonmap.JSON, key, expected string) bool {
+	actual := strings.TrimSpace(fmt.Sprint(payload[key]))
+	return expected != "" && actual == expected
 }
 
 // HandlePaypalWebhook 处理 PayPal webhook。

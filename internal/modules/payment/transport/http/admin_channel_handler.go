@@ -54,6 +54,14 @@ type AdminChannelCatalog interface {
 	TestChannelSecurity(ctx context.Context, id uint) (*paymentcontract.GatewaySecurityTestResult, error)
 }
 
+type paymentQueryTester interface {
+	TestPaymentQuery(ctx context.Context, id uint, orderNo string) (*paymentcontract.GatewayQueryTestResult, error)
+}
+
+type TestPaymentQueryRequest struct {
+	OrderNo string `json:"order_no" binding:"required"`
+}
+
 // CreatePaymentChannelRequest 创建支付渠道请求
 type CreatePaymentChannelRequest struct {
 	Name               string                 `json:"name" binding:"required"`
@@ -330,6 +338,30 @@ func (h *AdminChannelHandler) TestWechatPayPublicKey(c *gin.Context) {
 		return
 	}
 
+	response.Success(c, result)
+}
+
+func (h *AdminChannelHandler) TestPaymentQuery(c *gin.Context) {
+	id, err := ginutil.ParseParamUint(c, "id")
+	if err != nil {
+		ginutil.RespondError(c, response.CodeBadRequest, "error.payment_channel_invalid", nil)
+		return
+	}
+	var req TestPaymentQueryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		ginutil.RespondBindError(c, err)
+		return
+	}
+	tester, ok := h.channels.(paymentQueryTester)
+	if !ok {
+		ginutil.RespondError(c, response.CodeBadRequest, "error.payment_query_test_unsupported", nil)
+		return
+	}
+	result, err := tester.TestPaymentQuery(c.Request.Context(), id, strings.TrimSpace(req.OrderNo))
+	if err != nil {
+		ginutil.RespondError(c, response.CodeBadRequest, "error.payment_query_test_failed", err)
+		return
+	}
 	response.Success(c, result)
 }
 

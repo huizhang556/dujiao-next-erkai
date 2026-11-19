@@ -481,6 +481,22 @@ export interface AdminGatewaySecurityTestResult {
   echo_message_matched: boolean
 }
 
+export interface AdminPaymentQueryTestResult {
+  provider: string
+  endpoint: string
+  order_no: string
+  provider_ref?: string
+  merchant_id?: string
+  status: string
+  paid: boolean
+  amount: number | string
+  currency: string
+  channel_type?: string
+  amount_matched: boolean
+  order_matched: boolean
+  merchant_matched: boolean
+}
+
 // --- Payment ---
 export interface AdminPayment {
   id: number

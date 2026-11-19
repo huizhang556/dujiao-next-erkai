@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Eye, EyeOff } from 'lucide-vue-next'
 import { adminAPI, type TwoFAStatus } from '@/api/admin'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +19,12 @@ const passwordForm = reactive({
   old: '',
   new: '',
   confirm: '',
+})
+
+const passwordVisibility = reactive({
+  old: false,
+  new: false,
+  confirm: false,
 })
 
 const totpStatus = ref<TwoFAStatus | null>(null)
@@ -145,16 +152,73 @@ const changePassword = async () => {
         <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div class="space-y-2">
             <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.security.currentPassword') }}</label>
-            <Input v-model="passwordForm.old" type="password" :placeholder="t('admin.settings.security.currentPasswordPlaceholder')" />
+            <div class="relative">
+              <Input
+                v-model="passwordForm.old"
+                :type="passwordVisibility.old ? 'text' : 'password'"
+                :placeholder="t('admin.settings.security.currentPasswordPlaceholder')"
+                class="pr-10"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                class="absolute right-1 top-1/2 -translate-y-1/2"
+                :aria-label="t(passwordVisibility.old ? 'admin.settings.security.hidePassword' : 'admin.settings.security.showPassword')"
+                :title="t(passwordVisibility.old ? 'admin.settings.security.hidePassword' : 'admin.settings.security.showPassword')"
+                @click="passwordVisibility.old = !passwordVisibility.old"
+              >
+                <EyeOff v-if="passwordVisibility.old" class="h-4 w-4" />
+                <Eye v-else class="h-4 w-4" />
+              </Button>
+            </div>
           </div>
           <div class="grid grid-cols-1 gap-6 md:col-span-2 md:grid-cols-2">
             <div class="space-y-2">
               <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.security.newPassword') }}</label>
-              <Input v-model="passwordForm.new" type="password" :placeholder="t('admin.settings.security.newPasswordPlaceholder')" />
+              <div class="relative">
+                <Input
+                  v-model="passwordForm.new"
+                  :type="passwordVisibility.new ? 'text' : 'password'"
+                  :placeholder="t('admin.settings.security.newPasswordPlaceholder')"
+                  class="pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  class="absolute right-1 top-1/2 -translate-y-1/2"
+                  :aria-label="t(passwordVisibility.new ? 'admin.settings.security.hidePassword' : 'admin.settings.security.showPassword')"
+                  :title="t(passwordVisibility.new ? 'admin.settings.security.hidePassword' : 'admin.settings.security.showPassword')"
+                  @click="passwordVisibility.new = !passwordVisibility.new"
+                >
+                  <EyeOff v-if="passwordVisibility.new" class="h-4 w-4" />
+                  <Eye v-else class="h-4 w-4" />
+                </Button>
+              </div>
             </div>
             <div class="space-y-2">
               <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.security.confirmPassword') }}</label>
-              <Input v-model="passwordForm.confirm" type="password" :placeholder="t('admin.settings.security.confirmPasswordPlaceholder')" />
+              <div class="relative">
+                <Input
+                  v-model="passwordForm.confirm"
+                  :type="passwordVisibility.confirm ? 'text' : 'password'"
+                  :placeholder="t('admin.settings.security.confirmPasswordPlaceholder')"
+                  class="pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  class="absolute right-1 top-1/2 -translate-y-1/2"
+                  :aria-label="t(passwordVisibility.confirm ? 'admin.settings.security.hidePassword' : 'admin.settings.security.showPassword')"
+                  :title="t(passwordVisibility.confirm ? 'admin.settings.security.hidePassword' : 'admin.settings.security.showPassword')"
+                  @click="passwordVisibility.confirm = !passwordVisibility.confirm"
+                >
+                  <EyeOff v-if="passwordVisibility.confirm" class="h-4 w-4" />
+                  <Eye v-else class="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
         </div>

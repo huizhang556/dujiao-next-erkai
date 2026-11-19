@@ -111,12 +111,14 @@ redis:
   enabled: true
   host: redis
   port: 6379
+  # 应用连接 Redis 使用的密码，必须与 .env 中的 REDIS_PASSWORD 完全一致
   password: "db_redis_passwd"
 
 queue:
   enabled: true
   host: redis
   port: 6379
+  # 应用连接 Redis 任务队列使用的密码，也必须与 .env 中的 REDIS_PASSWORD 完全一致
   password: "db_redis_passwd"
   db: 1
   concurrency: 10
@@ -125,7 +127,7 @@ queue:
     critical: 5
 ~~~
 
-redis.password 和 queue.password 必须使用完全相同的密码，并且必须与 .env 中的 REDIS_PASSWORD 一致。
+redis.password 和 queue.password 必须使用完全相同的密码，并且必须与 .env 中的 REDIS_PASSWORD 一致。这里没有自动覆盖关系：.env 中的 REDIS_PASSWORD 只会配置 Redis 容器，config.yml 中的两个 password 才是应用连接 Redis 时使用的密码，三处必须手动保持一致。
 
 设置生产模式和首次管理员账号密码：
 
@@ -136,6 +138,7 @@ server:
   mode: release
 
 bootstrap:
+  # 只有 .env 中未提供 DJ_DEFAULT_ADMIN_USERNAME/PASSWORD 时，才使用这里的值
   default_admin_username: "admin"
   default_admin_password: "Admin123!"
 ~~~
@@ -159,11 +162,11 @@ TZ=Asia/Shanghai
 # 应用只绑定到本机，由 Nginx 提供 HTTPS
 APP_PORT=8899
 
-# 仅首次初始化管理员时使用
+# 传给应用容器，优先级高于 config.yml 中 bootstrap 的同名配置；仅首次初始化管理员时使用
 DJ_DEFAULT_ADMIN_USERNAME=admin
 DJ_DEFAULT_ADMIN_PASSWORD=Admin123!
 
-# 必须与 config/config.yml 中 redis.password 和 queue.password 一致
+# 传给 Redis 容器；不会自动修改 config.yml，必须与其中 redis.password 和 queue.password 手动保持一致
 REDIS_PASSWORD=db_redis_passwd
 
 # 必须与 config/config.yml 中 PostgreSQL DSN 的参数一致
@@ -261,11 +264,33 @@ networks:
 docker compose --env-file .env -f docker-compose.postgres.yml config
 ~~~
 
-没有报错后再继续启动。
+正常情况下会输出展开变量后的 Compose 配置。最前面的 `name` 会根据部署目录名称变化，不需要固定为某个值；后面的内容中应能看到三个服务：
 
-### 6. 配置 Nginx HTTPS 反向代理
+~~~text
+name: dujiao-next-erkai
+services:
+  dujiao-next:
+    image: litehub/dujiao-next-erkai:latest
+  postgres:
+    image: postgres:16-alpine
+  redis:
+    image: redis:7-alpine
+...
+~~~
 
-将 shop.example.com 换成你的域名，将证书路径换成实际路径：
+实际输出会比上面更长，还会显示端口、挂载目录、健康检查和网络配置。只要命令正常结束、没有出现 error，并且变量已经被替换，就可以继续。这个命令只检查 Compose 文件，不会拉取镜像、创建容器或启动项目。
+
+如果出现变量未设置、YAML 格式错误或文件不存在等错误，先修正错误，不要继续启动。
+
+### 6. 选择访问方式
+
+请根据自己的情况选择一种方式。项目必须先启动成功，才能访问前台或后台。
+
+#### 方式一：有域名，使用 Nginx HTTPS
+
+如果服务器已经有域名和 HTTPS 证书，可以使用 Nginx 反向代理。Nginx 可以手动安装配置，也可以由宝塔等服务器面板管理。使用面板时，请在面板的网站设置、反向代理和 SSL 设置中填写同样的代理参数，不需要再次执行下面的 systemctl 命令。
+
+将 shop.example.com 换成你的域名，将证书路径换成实际路径。下面的配置适用于手动管理 Nginx 的情况：
 
 ~~~nginx
 server {
@@ -290,14 +315,41 @@ server {
 nginx -t && systemctl reload nginx
 ~~~
 
-访问地址：
+如果使用宝塔或其他面板，请使用面板完成以下配置：
 
-~~~text
-用户前台：https://shop.example.com
-管理后台：https://shop.example.com/admin
+- 网站域名：你的实际域名
+- 反向代理目标：`http://127.0.0.1:8899`
+- WebSocket：按面板选项开启
+- SSL：在面板中申请或配置证书，并开启 HTTPS
+
+保持 Compose 中的 `127.0.0.1:${APP_PORT}:8080` 不变，这样应用端口不会直接暴露到公网。
+
+#### 方式二：没有域名，使用服务器 IP + 端口
+
+如果暂时没有域名和 HTTPS，可以直接使用服务器 IP 访问。先编辑 `docker-compose.postgres.yml`，将：
+
+~~~yaml
+- "127.0.0.1:${APP_PORT}:8080"
 ~~~
 
+改为：
+
+~~~yaml
+- "${APP_PORT}:8080"
+~~~
+
+然后在服务器防火墙和云服务器安全组中放行 `APP_PORT`，再启动项目。假设 `.env` 中 `APP_PORT=8899`，访问地址为：
+
+~~~text
+用户前台：http://服务器IP:8899
+管理后台：http://服务器IP:8899/admin
+~~~
+
+这种方式是 HTTP，不是 HTTPS，只适合临时测试或内网使用。正式部署建议使用域名、Nginx 和 HTTPS。
+
 ### 7. 启动、查看和停止
+
+先启动项目：
 
 ~~~bash
 cd /opt/dujiao-next-erkai
@@ -308,6 +360,13 @@ docker compose --env-file .env -f docker-compose.postgres.yml up -d
 # 查看三个容器状态；等待三个服务变为 healthy
 docker compose --env-file .env -f docker-compose.postgres.yml ps
 ~~~
+
+确认三个服务都处于 `Up`，并且 PostgreSQL、Redis、应用容器的健康状态为 `healthy` 后，再访问网站。
+
+访问地址：
+
+- 使用域名和 HTTPS：`https://你的域名`；后台为 `https://你的域名/admin`
+- 使用 IP 和端口：`http://服务器IP:8899`；后台为 `http://服务器IP:8899/admin`
 
 查看日志：
 

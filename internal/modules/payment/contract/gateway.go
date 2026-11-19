@@ -50,6 +50,23 @@ type GatewayQueryResult struct {
 	Payload     jsonmap.JSON
 }
 
+// GatewayQueryTestResult is the sanitized result shown by the admin query test.
+type GatewayQueryTestResult struct {
+	Provider        string       `json:"provider"`
+	Endpoint        string       `json:"endpoint"`
+	OrderNo         string       `json:"order_no"`
+	ProviderRef     string       `json:"provider_ref,omitempty"`
+	MerchantID      string       `json:"merchant_id,omitempty"`
+	Status          string       `json:"status"`
+	Paid            bool         `json:"paid"`
+	Amount          money.Amount `json:"amount"`
+	Currency        string       `json:"currency"`
+	ChannelType     string       `json:"channel_type,omitempty"`
+	AmountMatched   bool         `json:"amount_matched"`
+	OrderMatched    bool         `json:"order_matched"`
+	MerchantMatched bool         `json:"merchant_matched"`
+}
+
 // GatewayCallbackResult 是同步回调或异步 Webhook 的标准结果。
 type GatewayCallbackResult struct {
 	OrderNo     string

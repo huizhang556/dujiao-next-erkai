@@ -2,7 +2,7 @@
 
 The management console for operating products, orders, users, payment channels, and system settings.
 
-> This directory is part of the [dujiao-next](https://github.com/dujiao-next/dujiao-next)
+> This directory is part of the [dujiao-next-erkai](https://github.com/huizhang556/dujiao-next-erkai)
 > single repository and is no longer released on its own. Production assets are embedded
 > into the server binary via `go:embed` and served by the same process, on the same port,
 > as `frontend/user`.

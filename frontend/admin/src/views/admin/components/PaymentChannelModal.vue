@@ -2,7 +2,7 @@
 import { onMounted, computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
-import type { AdminGatewaySecurityTestResult, AdminMemberLevel } from '@/api/types'
+import type { AdminGatewaySecurityTestResult, AdminMemberLevel, AdminPaymentQueryTestResult } from '@/api/types'
 import { getLocalizedText } from '@/utils/format'
 import { resolveOkpayChannelTypeFromConfig } from '@/utils/paymentChannelDisplay'
 import MediaPicker from '@/components/admin/MediaPicker.vue'
@@ -34,6 +34,8 @@ const applyingChannelData = ref(false)
 const configJsonPlaceholder = '{ "key": "value" }'
 const testingWechatPublicKey = ref(false)
 const wechatPublicKeyTestResult = ref<AdminGatewaySecurityTestResult | null>(null)
+const testingPaymentQuery = ref(false)
+const paymentQueryTestResult = ref<AdminPaymentQueryTestResult | null>(null)
 
 const form = reactive({
   name: '',
@@ -76,6 +78,11 @@ const epayConfig = reactive({
   return_url: '',
   target_currency: '',
   exchange_rate: '',
+  query_enabled: false,
+  query_provider: 'zpay_v1',
+  query_url: 'https://zpay.cn/api.php',
+  query_timeout_seconds: 5,
+  query_test_order_no: '',
 })
 
 const paypalConfig = reactive({
@@ -348,6 +355,11 @@ const resetEpayConfig = () => {
   epayConfig.return_url = ''
   epayConfig.target_currency = ''
   epayConfig.exchange_rate = ''
+  epayConfig.query_enabled = false
+  epayConfig.query_provider = 'zpay_v1'
+  epayConfig.query_url = 'https://zpay.cn/api.php'
+  epayConfig.query_timeout_seconds = 5
+  epayConfig.query_test_order_no = ''
 }
 
 const resetPaypalConfig = () => {
@@ -488,6 +500,12 @@ const applyEpayConfig = (raw: Record<string, unknown>) => {
   epayConfig.return_url = String(raw.return_url || '')
   epayConfig.target_currency = String(raw.target_currency || '')
   epayConfig.exchange_rate = String(raw.exchange_rate || '')
+  epayConfig.query_enabled = raw.query_enabled === true
+  epayConfig.query_provider = 'zpay_v1'
+  epayConfig.query_url = String(raw.query_url || 'https://zpay.cn/api.php')
+  const timeout = Number(raw.query_timeout_seconds)
+  epayConfig.query_timeout_seconds = Number.isFinite(timeout) && timeout > 0 ? timeout : 5
+  epayConfig.query_test_order_no = ''
 }
 
 const applyPaypalConfig = (raw: Record<string, unknown>) => {
@@ -631,6 +649,17 @@ const buildEpayConfig = () => {
   }
   setIfNotEmpty('target_currency', epayConfig.target_currency)
   setIfNotEmpty('exchange_rate', epayConfig.exchange_rate)
+  if (epayConfig.epay_version === 'v1') {
+    config.query_enabled = epayConfig.query_enabled
+    config.query_provider = 'zpay_v1'
+    config.query_url = epayConfig.query_url.trim() || 'https://zpay.cn/api.php'
+    config.query_timeout_seconds = Math.min(30, Math.max(1, Number(epayConfig.query_timeout_seconds) || 5))
+  } else {
+    delete config.query_enabled
+    delete config.query_provider
+    delete config.query_url
+    delete config.query_timeout_seconds
+  }
   return config
 }
 
@@ -979,6 +1008,7 @@ watch(
 function resetFormForCreate() {
   error.value = ''
   wechatPublicKeyTestResult.value = null
+  paymentQueryTestResult.value = null
   showAdvanced.value = false
   applyingChannelData.value = true
   form.name = ''
@@ -1018,6 +1048,7 @@ watch(
   async (id) => {
     error.value = ''
     wechatPublicKeyTestResult.value = null
+    paymentQueryTestResult.value = null
     showAdvanced.value = false
     if (id === null) {
       // Create mode: reset form
@@ -1090,6 +1121,28 @@ const handleWechatPublicKeyTest = async () => {
     error.value = err?.message || t('admin.paymentChannels.modal.wechatPublicKeyTestFailed')
   } finally {
     testingWechatPublicKey.value = false
+  }
+}
+
+const handlePaymentQueryTest = async () => {
+  if (!props.channelId || testingPaymentQuery.value) {
+    return
+  }
+  const orderNo = epayConfig.query_test_order_no.trim()
+  if (!orderNo) {
+    error.value = t('admin.paymentChannels.modal.queryTestOrderRequired')
+    return
+  }
+  error.value = ''
+  paymentQueryTestResult.value = null
+  testingPaymentQuery.value = true
+  try {
+    const response = await adminAPI.testPaymentQuery(props.channelId, orderNo)
+    paymentQueryTestResult.value = response.data.data as AdminPaymentQueryTestResult
+  } catch (err: any) {
+    error.value = err?.message || t('admin.paymentChannels.modal.queryTestFailed')
+  } finally {
+    testingPaymentQuery.value = false
   }
 }
 
@@ -1415,6 +1468,52 @@ const closeModal = () => {
             </div>
           </div>
           <div class="mt-3 text-xs text-muted-foreground">{{ t('admin.paymentChannels.modal.epayHint') }}</div>
+          <div v-if="epayConfig.epay_version === 'v1'" class="mt-4 border-t border-border pt-4">
+            <div class="mb-3 text-sm font-semibold text-foreground">{{ t('admin.paymentChannels.modal.querySection') }}</div>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 [&>*]:min-w-0">
+              <div class="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+                <Switch v-model="epayConfig.query_enabled" />
+                <Label class="text-xs text-muted-foreground">{{ t('admin.paymentChannels.modal.queryEnabled') }}</Label>
+              </div>
+              <div class="min-w-0">
+                <label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('admin.paymentChannels.modal.queryProvider') }}</label>
+                <Select v-model="epayConfig.query_provider" disabled>
+                  <SelectTrigger class="h-9 w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="zpay_v1">{{ t('admin.paymentChannels.modal.queryProviderZpay') }}</SelectItem></SelectContent>
+                </Select>
+              </div>
+              <div class="min-w-0 md:col-span-2">
+                <label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('admin.paymentChannels.modal.queryUrl') }}</label>
+                <Input v-model="epayConfig.query_url" class="break-all" :placeholder="t('admin.paymentChannels.modal.queryUrlPlaceholder')" />
+              </div>
+              <div class="min-w-0">
+                <label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('admin.paymentChannels.modal.queryTimeout') }}</label>
+                <Input v-model.number="epayConfig.query_timeout_seconds" type="number" min="1" max="30" :placeholder="t('admin.paymentChannels.modal.queryTimeoutPlaceholder')" />
+              </div>
+            </div>
+            <p class="mt-3 text-xs text-muted-foreground">{{ t('admin.paymentChannels.modal.queryHint') }}</p>
+            <div class="mt-4 rounded-md border border-border p-3">
+              <div class="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                <div class="min-w-0">
+                  <label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('admin.paymentChannels.modal.queryTestOrderNo') }}</label>
+                  <Input v-model="epayConfig.query_test_order_no" :placeholder="t('admin.paymentChannels.modal.queryTestOrderNoPlaceholder')" />
+                </div>
+                <Button type="button" variant="outline" class="w-full sm:w-auto" :disabled="!isEditing || testingPaymentQuery" @click="handlePaymentQueryTest">
+                  {{ testingPaymentQuery ? t('admin.common.loading') : t('admin.paymentChannels.modal.queryTest') }}
+                </Button>
+              </div>
+              <p v-if="!isEditing" class="mt-2 text-xs text-muted-foreground">{{ t('admin.paymentChannels.modal.queryTestSaveFirst') }}</p>
+              <div v-if="paymentQueryTestResult" class="mt-3 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-700 dark:text-emerald-300">
+                <div class="mb-2 font-medium">{{ t('admin.paymentChannels.modal.queryStatus') }}: {{ paymentQueryTestResult.paid ? t('admin.paymentChannels.modal.queryPaid') : t('admin.paymentChannels.modal.queryUnpaid') }}</div>
+                <div class="grid gap-1 sm:grid-cols-2">
+                  <span>{{ t('admin.paymentChannels.modal.queryOrder') }}</span><span class="sm:text-right">{{ paymentQueryTestResult.order_matched ? t('admin.paymentChannels.modal.queryMatched') : t('admin.paymentChannels.modal.queryNotMatched') }}</span>
+                  <span>{{ t('admin.paymentChannels.modal.queryMerchant') }}</span><span class="sm:text-right">{{ paymentQueryTestResult.merchant_matched ? t('admin.paymentChannels.modal.queryMatched') : t('admin.paymentChannels.modal.queryNotMatched') }}</span>
+                  <span>{{ t('admin.paymentChannels.modal.queryAmount') }}</span><span class="sm:text-right">{{ paymentQueryTestResult.amount }} {{ paymentQueryTestResult.currency }} ({{ paymentQueryTestResult.amount_matched ? t('admin.paymentChannels.modal.queryMatched') : t('admin.paymentChannels.modal.queryNotMatched') }})</span>
+                  <span>{{ t('admin.paymentChannels.modal.queryEndpoint') }}</span><span class="break-all sm:text-right">{{ paymentQueryTestResult.endpoint }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div v-if="form.provider_type === 'official' && form.channel_type === 'paypal'" class="min-w-0 rounded-xl border border-border bg-muted/20 p-4 overflow-hidden">

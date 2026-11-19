@@ -46,6 +46,7 @@ type SiteScriptItem = {
 
 const siteScriptsMaxCount = 20
 const footerLinksMaxCount = 20
+const contactMaxCount = 4
 
 const registrationForm = reactive({
   registration_enabled: true,
@@ -59,7 +60,15 @@ type FooterLinkItem = {
   name: string
   url: string
 }
+type ContactItem = {
+  name: string
+  url: string
+}
 const createFooterLinkItem = (): FooterLinkItem => ({
+  name: '',
+  url: '',
+})
+const createContactItem = (): ContactItem => ({
   name: '',
   url: '',
 })
@@ -162,6 +171,21 @@ const normalizeFooterLinks = (raw: unknown): FooterLinkItem[] => {
     .slice(0, footerLinksMaxCount)
 }
 
+const normalizeContactItems = (raw: unknown): ContactItem[] => {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null
+      const value = item as Record<string, unknown>
+      return {
+        name: typeof value.name === 'string' ? value.name : '',
+        url: typeof value.url === 'string' ? value.url : '',
+      } as ContactItem
+    })
+    .filter((item): item is ContactItem => !!item)
+    .slice(0, contactMaxCount - 1)
+}
+
 const normalizeLocalizedField = (raw: unknown): Record<SupportedLanguage, string> => {
   const normalized = createLocalizedField()
   if (!raw || typeof raw !== 'object') {
@@ -192,7 +216,7 @@ const form = reactive({
   order_max_refund_days: 30,
   contact: {
     telegram: '',
-    whatsapp: '',
+    custom: [] as ContactItem[],
   },
   seo: {
     title: createLocalizedField(),
@@ -400,7 +424,9 @@ const fetchSettings = async () => {
         form.currency = /^[A-Z]{3}$/.test(rawCurrency) ? rawCurrency : 'CNY'
       }
       if (data.contact) {
-        Object.assign(form.contact, data.contact)
+        const contact = data.contact as Record<string, unknown>
+        form.contact.telegram = typeof contact.telegram === 'string' ? contact.telegram : ''
+        form.contact.custom.splice(0, form.contact.custom.length, ...normalizeContactItems(contact.custom))
       }
       const seo = data.seo as Record<string, unknown> | undefined
       if (seo) {
@@ -692,6 +718,18 @@ const addFooterLinkItem = () => {
 
 const removeFooterLinkItem = (index: number) => {
   form.footer_links.splice(index, 1)
+}
+
+const addContactItem = () => {
+  if (form.contact.custom.length >= contactMaxCount - 1) {
+    notifyError(t('admin.settings.contact.maxHint', { max: contactMaxCount }))
+    return
+  }
+  form.contact.custom.push(createContactItem())
+}
+
+const removeContactItem = (index: number) => {
+  form.contact.custom.splice(index, 1)
 }
 
 
@@ -1034,18 +1072,31 @@ onMounted(() => {
       </div>
 
       <div class="rounded-xl border border-border bg-card">
-        <div class="border-b border-border bg-muted/40 px-6 py-4">
-          <h2 class="text-lg font-semibold">{{ t('admin.settings.contact.title') }}</h2>
-          <p class="mt-1 text-xs text-muted-foreground">{{ t('admin.settings.contact.subtitle') }}</p>
+        <div class="flex flex-col gap-3 border-b border-border bg-muted/40 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 class="text-lg font-semibold">{{ t('admin.settings.contact.title') }}</h2>
+            <p class="mt-1 text-xs text-muted-foreground">{{ t('admin.settings.contact.subtitle') }}</p>
+          </div>
+          <Button type="button" size="sm" variant="outline" class="w-full sm:w-auto" @click="addContactItem">
+            {{ t('admin.settings.contact.add') }}
+          </Button>
         </div>
-        <div class="grid grid-cols-1 gap-6 p-6 md:grid-cols-2">
+        <div class="space-y-4 p-6">
           <div class="space-y-2">
             <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.contact.telegram') }}</label>
             <Input v-model="form.contact.telegram" :placeholder="t('admin.settings.contact.telegramPlaceholder')" />
           </div>
-          <div class="space-y-2">
-            <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.contact.whatsapp') }}</label>
-            <Input v-model="form.contact.whatsapp" :placeholder="t('admin.settings.contact.whatsappPlaceholder')" />
+          <div v-if="form.contact.custom.length === 0" class="rounded-lg border border-dashed border-border bg-muted/10 px-3 py-6 text-center text-xs text-muted-foreground">
+            {{ t('admin.settings.contact.empty') }}
+          </div>
+          <div v-for="(contact, index) in form.contact.custom" :key="`contact-${index}`" class="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div class="grid flex-1 grid-cols-1 gap-3 md:grid-cols-2">
+              <Input v-model="contact.name" :placeholder="t('admin.settings.contact.namePlaceholder')" />
+              <Input v-model="contact.url" :placeholder="t('admin.settings.contact.urlPlaceholder')" />
+            </div>
+            <Button type="button" size="sm" variant="destructive" class="w-full sm:w-auto" @click="removeContactItem(index)">
+              {{ t('admin.common.delete') }}
+            </Button>
           </div>
         </div>
       </div>
