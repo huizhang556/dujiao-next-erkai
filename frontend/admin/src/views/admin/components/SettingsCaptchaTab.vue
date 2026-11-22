@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { notifyError, notifySuccess } from '@/utils/notify'
+import PasswordInput from '@/components/PasswordInput.vue'
 
 const { t } = useI18n()
 
@@ -245,7 +246,7 @@ defineExpose({ save, submitting })
             </div>
             <div class="space-y-2 md:col-span-2">
               <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.captcha.turnstile.secretKey') }}</label>
-              <Input v-model="form.turnstile.secret_key" type="password" :placeholder="t('admin.settings.captcha.turnstile.secretKeyPlaceholder')" />
+              <PasswordInput v-model="form.turnstile.secret_key" :placeholder="t('admin.settings.captcha.turnstile.secretKeyPlaceholder')" />
               <p class="text-xs text-muted-foreground">
                 {{ form.turnstile.has_secret ? t('admin.settings.captcha.turnstile.secretHintKeep') : t('admin.settings.captcha.turnstile.secretHintEmpty') }}
               </p>

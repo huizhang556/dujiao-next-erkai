@@ -69,7 +69,7 @@
             <label class="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
               <KeyRound class="h-3.5 w-3.5 opacity-70" /> {{ t('auth.forgot.newPasswordLabel') }}
             </label>
-            <Input v-model="newPassword" type="password" required class="h-11" :placeholder="t('auth.forgot.newPasswordPlaceholder')" />
+            <PasswordInput v-model="newPassword" required input-class="h-11" :placeholder="t('auth.forgot.newPasswordPlaceholder')" />
           </div>
 
           <Alert v-if="error" variant="destructive" class="text-center">
@@ -100,6 +100,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import PasswordInput from '@/components/PasswordInput.vue'
 import { useForgot } from '../../../composables/useForgot'
 
 const { t } = useI18n()

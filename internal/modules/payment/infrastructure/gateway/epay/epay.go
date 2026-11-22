@@ -46,6 +46,7 @@ const (
 	epayDevicePC  = "pc"
 
 	epayHeaderAcceptLanguage = "zh-CN,zh;q=0.9,en;q=0.8"
+	defaultZPayV1QueryURL    = "https://zpayz.cn/api.php"
 )
 
 var (
@@ -147,7 +148,7 @@ func ValidateConfig(cfg *Config) error {
 func queryEndpoint(cfg *Config) (string, error) {
 	endpoint := strings.TrimSpace(cfg.QueryURL)
 	if endpoint == "" {
-		endpoint = strings.TrimRight(strings.TrimSpace(cfg.GatewayURL), "/") + "/api.php"
+		endpoint = defaultZPayV1QueryURL
 	}
 	u, err := url.Parse(endpoint)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {

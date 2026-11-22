@@ -23,6 +23,7 @@ import SettingsOrderEmailTemplateTab from './components/SettingsOrderEmailTempla
 import SettingsNavigationTab from './components/SettingsNavigationTab.vue'
 import SettingsHomeAnnouncementTab from './components/SettingsHomeAnnouncementTab.vue'
 import SettingsUpstreamSyncTab from './components/SettingsUpstreamSyncTab.vue'
+import PasswordInput from '@/components/PasswordInput.vue'
 
 const { t } = useI18n()
 const loading = ref(false)
@@ -1478,7 +1479,7 @@ onMounted(() => {
             </div>
             <div class="space-y-2">
               <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.telegram.botToken') }}</label>
-              <Input v-model="telegramForm.bot_token" type="password" :placeholder="t('admin.settings.telegram.botTokenPlaceholder')" />
+              <PasswordInput v-model="telegramForm.bot_token" :placeholder="t('admin.settings.telegram.botTokenPlaceholder')" />
               <p class="text-xs text-muted-foreground">
                 {{ telegramForm.has_bot_token ? t('admin.settings.telegram.botTokenHintKeep') : t('admin.settings.telegram.botTokenHintEmpty') }}
               </p>
@@ -1491,7 +1492,7 @@ onMounted(() => {
             </div>
             <div class="space-y-2">
               <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.telegram.clientSecret') }}</label>
-              <Input v-model="telegramForm.client_secret" type="password" :placeholder="t('admin.settings.telegram.clientSecretPlaceholder')" />
+              <PasswordInput v-model="telegramForm.client_secret" :placeholder="t('admin.settings.telegram.clientSecretPlaceholder')" />
               <p class="text-xs text-muted-foreground">
                 {{ telegramForm.has_client_secret ? t('admin.settings.telegram.clientSecretHintKeep') : t('admin.settings.telegram.clientSecretHintEmpty') }}
               </p>

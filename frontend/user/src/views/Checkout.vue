@@ -131,10 +131,9 @@
                 class="h-11"
                 :placeholder="t('checkout.guestEmailPlaceholder')"
               />
-              <Input
+              <PasswordInput
                 v-model="guestPassword"
-                type="password"
-                class="h-11"
+                input-class="h-11"
                 :placeholder="t('checkout.guestPasswordPlaceholder')"
               />
             </div>
@@ -320,6 +319,7 @@ import EmptyState from '../components/EmptyState.vue'
 import SmartImage from '../components/SmartImage.vue'
 import CheckoutSteps from '../components/checkout/CheckoutSteps.vue'
 import { Input } from '@/components/ui/input'
+import PasswordInput from '@/components/PasswordInput.vue'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useCheckout } from '../composables/useCheckout'

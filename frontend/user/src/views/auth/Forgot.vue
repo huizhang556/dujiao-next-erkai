@@ -94,9 +94,8 @@
               <KeyRound class="h-3.5 w-3.5 opacity-60" />
               {{ t('auth.forgot.newPasswordLabel') }}
             </label>
-            <Input
+            <PasswordInput
               v-model="newPassword"
-              type="password"
               required
               class="h-11"
               :placeholder="t('auth.forgot.newPasswordPlaceholder')"
@@ -136,6 +135,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import PasswordInput from '@/components/PasswordInput.vue'
 import { useForgot } from '../../composables/useForgot'
 
 const { t } = useI18n()

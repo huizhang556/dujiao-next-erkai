@@ -11,6 +11,7 @@ const TOKEN_KEY = 'admin_token'
 const ROLES_KEY = 'admin_roles'
 const PERMISSIONS_KEY = 'admin_permissions'
 const IS_SUPER_KEY = 'admin_is_super'
+const USERNAME_KEY = 'admin_username'
 
 function readArrayStorage(key: string): string[] {
   const raw = localStorage.getItem(key)
@@ -83,6 +84,7 @@ export const useAdminAuthStore = defineStore('adminAuth', {
   state: () => ({
     loading: false,
     token: localStorage.getItem(TOKEN_KEY) || '',
+    username: localStorage.getItem(USERNAME_KEY) || '',
     isSuper: localStorage.getItem(IS_SUPER_KEY) === '1',
     roles: readArrayStorage(ROLES_KEY),
     permissions: readArrayStorage(PERMISSIONS_KEY),
@@ -106,7 +108,9 @@ export const useAdminAuthStore = defineStore('adminAuth', {
         }
         const ok = data as AdminLoginPasswordResponse
         this.token = ok.token
+        this.username = String(ok.user?.username || '')
         localStorage.setItem(TOKEN_KEY, ok.token)
+        localStorage.setItem(USERNAME_KEY, this.username)
         this.requiresTotp = false
         this.challengeToken = ''
         this.challengeExpiresAt = ''
@@ -129,7 +133,9 @@ export const useAdminAuthStore = defineStore('adminAuth', {
         })
         const data = response.data.data as AdminLoginPasswordResponse
         this.token = data.token
+        this.username = String(data.user?.username || '')
         localStorage.setItem(TOKEN_KEY, data.token)
+        localStorage.setItem(USERNAME_KEY, this.username)
         this.requiresTotp = false
         this.challengeToken = ''
         this.challengeExpiresAt = ''
@@ -192,7 +198,9 @@ export const useAdminAuthStore = defineStore('adminAuth', {
 
     logout() {
       this.token = ''
+      this.username = ''
       localStorage.removeItem(TOKEN_KEY)
+      localStorage.removeItem(USERNAME_KEY)
       this.clearAuthzCache()
       // 重置合规声明 store，避免下次登录时残留旧状态
       // 动态 import 防止模块加载期循环依赖

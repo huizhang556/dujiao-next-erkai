@@ -11,6 +11,7 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { getLocalizedText } from '@/utils/format'
 import { notifyError, notifySuccess } from '@/utils/notify'
+import PasswordInput from '@/components/PasswordInput.vue'
 
 const { t } = useI18n()
 
@@ -474,9 +475,8 @@ defineExpose({ save, submitting })
                 </div>
                 <div class="space-y-2">
                   <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.notification.channels.feishu.appSecret') }}</label>
-                  <Input
+                  <PasswordInput
                     v-model="form.channels.feishu.app_secret"
-                    type="password"
                     :placeholder="t('admin.settings.notification.channels.feishu.appSecretPlaceholder')"
                     autocomplete="new-password"
                   />

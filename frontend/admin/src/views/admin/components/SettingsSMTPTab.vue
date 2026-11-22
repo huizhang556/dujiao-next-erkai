@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { notifyError, notifySuccess } from '@/utils/notify'
+import PasswordInput from '@/components/PasswordInput.vue'
 
 const { t } = useI18n()
 
@@ -192,7 +193,7 @@ defineExpose({ save, submitting, smtpTesting })
           </div>
           <div class="space-y-2">
             <label class="text-xs font-medium text-muted-foreground">{{ t('admin.settings.smtp.password') }}</label>
-            <Input v-model="form.password" type="password" :placeholder="t('admin.settings.smtp.passwordPlaceholder')" />
+            <PasswordInput v-model="form.password" :placeholder="t('admin.settings.smtp.passwordPlaceholder')" />
             <p class="text-xs text-muted-foreground">
               {{ form.has_password ? t('admin.settings.smtp.passwordHintKeep') : t('admin.settings.smtp.passwordHintEmpty') }}
             </p>

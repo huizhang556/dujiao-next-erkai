@@ -10,35 +10,32 @@
     <form class="mt-6 space-y-6" @submit.prevent="$emit('submit')">
       <div v-if="requiresOldPassword">
         <Label class="mb-2 block">{{ t('personalCenter.security.currentPasswordLabel') }}</Label>
-        <Input
+        <PasswordInput
           :model-value="oldPassword"
           @update:model-value="(v) => $emit('update:oldPassword', String(v))"
-          type="password"
           :placeholder="t('personalCenter.security.passwordPlaceholder')"
-          class="h-11"
+          input-class="h-11"
         />
       </div>
 
       <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
         <div>
           <Label class="mb-2 block">{{ t('personalCenter.security.newPasswordLabel') }}</Label>
-          <Input
+          <PasswordInput
             :model-value="newPassword"
             @update:model-value="(v) => $emit('update:newPassword', String(v))"
-            type="password"
             :placeholder="t('personalCenter.security.passwordPlaceholder')"
-            class="h-11"
+            input-class="h-11"
           />
         </div>
 
         <div>
           <Label class="mb-2 block">{{ t('personalCenter.security.confirmPasswordLabel') }}</Label>
-          <Input
+          <PasswordInput
             :model-value="confirmPassword"
             @update:model-value="(v) => $emit('update:confirmPassword', String(v))"
-            type="password"
             :placeholder="t('personalCenter.security.passwordPlaceholder')"
-            class="h-11"
+            input-class="h-11"
           />
         </div>
       </div>
@@ -59,8 +56,8 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import PasswordInput from '@/components/PasswordInput.vue'
 
 const { t } = useI18n()
 

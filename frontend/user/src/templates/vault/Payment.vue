@@ -22,7 +22,7 @@
       <p class="mb-3.5 text-[13px] text-muted-foreground">{{ t('payment.guestAuthHint') }}</p>
       <div class="grid gap-3 sm:grid-cols-2">
         <Input v-model="guestAuth.email" type="email" class="h-11" :placeholder="t('guestOrders.emailPlaceholder')" />
-        <Input v-model="guestAuth.order_password" type="password" class="h-11" :placeholder="t('guestOrders.passwordPlaceholder')" />
+        <PasswordInput v-model="guestAuth.order_password" input-class="h-11" :placeholder="t('guestOrders.passwordPlaceholder')" />
       </div>
       <div v-if="guestAuthError" class="mt-3.5 rounded-sm bg-destructive/10 px-3 py-2.5 text-[13px] font-semibold text-destructive">{{ guestAuthError }}</div>
       <Button size="sm" class="mt-3.5 rounded-full" @click="handleGuestAuthSubmit">{{ t('payment.guestAuthSubmit') }}</Button>
@@ -254,6 +254,7 @@ import { useI18n } from 'vue-i18n'
 import { AlertCircle } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import PasswordInput from '@/components/PasswordInput.vue'
 import PaymentAmountBreakdown from '../../components/payment/PaymentAmountBreakdown.vue'
 import PaymentChannelSelector from '../../components/payment/PaymentChannelSelector.vue'
 import VaultCheckoutSteps from './components/VaultCheckoutSteps.vue'

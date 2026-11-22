@@ -45,8 +45,8 @@
           <Input v-model="guestAuth.email" type="email"
             class="h-11"
             :placeholder="t('guestOrders.emailPlaceholder')" />
-          <Input v-model="guestAuth.order_password" type="password"
-            class="h-11"
+          <PasswordInput v-model="guestAuth.order_password"
+            input-class="h-11"
             :placeholder="t('guestOrders.passwordPlaceholder')" />
         </div>
         <Alert v-if="guestAuthError" variant="destructive" class="mt-4">
@@ -497,6 +497,7 @@ import PaymentChannelSelector from '../components/payment/PaymentChannelSelector
 import EmptyState from '../components/EmptyState.vue'
 import CheckoutSteps from '../components/checkout/CheckoutSteps.vue'
 import { Input } from '@/components/ui/input'
+import PasswordInput from '@/components/PasswordInput.vue'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'

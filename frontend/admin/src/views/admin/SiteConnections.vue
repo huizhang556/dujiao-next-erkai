@@ -15,6 +15,7 @@ import { getLocalizedText } from '@/utils/format'
 import { confirmAction } from '@/utils/confirm'
 import { notifyError, notifySuccess } from '@/utils/notify'
 import { useFormValidation, rules } from '@/composables/useFormValidation'
+import PasswordInput from '@/components/PasswordInput.vue'
 
 const { t } = useI18n()
 const loading = ref(true)
@@ -504,7 +505,7 @@ onMounted(() => {
             </div>
             <div>
               <label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('siteConnections.form.apiSecret') }}</label>
-              <Input v-model="form.api_secret" type="password" :placeholder="t('siteConnections.form.apiSecretPlaceholder')" />
+              <PasswordInput v-model="form.api_secret" :placeholder="t('siteConnections.form.apiSecretPlaceholder')" />
             </div>
             <div>
               <label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('siteConnections.form.protocol') }}</label>

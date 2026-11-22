@@ -84,7 +84,7 @@
           <template v-if="checkoutMode === 'guest'">
             <div class="grid gap-3 sm:grid-cols-2">
               <Input v-model="guestEmail" type="email" class="h-11" :placeholder="t('checkout.guestEmailPlaceholder')" />
-              <Input v-model="guestPassword" type="password" class="h-11" :placeholder="t('checkout.guestPasswordPlaceholder')" />
+            <PasswordInput v-model="guestPassword" input-class="h-11" :placeholder="t('checkout.guestPasswordPlaceholder')" />
             </div>
 
             <div v-if="guestCaptchaEnabled" class="mt-3.5">
@@ -203,6 +203,7 @@ import { useI18n } from 'vue-i18n'
 import { ChevronRight, Package, ShoppingCart } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import PasswordInput from '@/components/PasswordInput.vue'
 import ImageCaptcha from '../../components/captcha/ImageCaptcha.vue'
 import TurnstileCaptcha from '../../components/captcha/TurnstileCaptcha.vue'
 import CheckoutManualForm from '../../components/checkout/CheckoutManualForm.vue'

@@ -95,7 +95,7 @@
                   :aria-label="showPassword ? t('auth.common.hidePassword') : t('auth.common.showPassword')"
                   @click="showPassword = !showPassword"
                 >
-                  <EyeOff v-if="showPassword" class="h-4 w-4" aria-hidden="true" /><Eye v-else class="h-4 w-4" aria-hidden="true" />
+                  <Eye v-if="showPassword" class="h-4 w-4" aria-hidden="true" /><EyeOff v-else class="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
             </template>

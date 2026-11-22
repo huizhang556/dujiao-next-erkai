@@ -168,8 +168,8 @@ const changePassword = async () => {
                 :title="t(passwordVisibility.old ? 'admin.settings.security.hidePassword' : 'admin.settings.security.showPassword')"
                 @click="passwordVisibility.old = !passwordVisibility.old"
               >
-                <EyeOff v-if="passwordVisibility.old" class="h-4 w-4" />
-                <Eye v-else class="h-4 w-4" />
+                <Eye v-if="passwordVisibility.old" class="h-4 w-4" />
+                <EyeOff v-else class="h-4 w-4" />
               </Button>
             </div>
           </div>
@@ -192,8 +192,8 @@ const changePassword = async () => {
                   :title="t(passwordVisibility.new ? 'admin.settings.security.hidePassword' : 'admin.settings.security.showPassword')"
                   @click="passwordVisibility.new = !passwordVisibility.new"
                 >
-                  <EyeOff v-if="passwordVisibility.new" class="h-4 w-4" />
-                  <Eye v-else class="h-4 w-4" />
+                  <Eye v-if="passwordVisibility.new" class="h-4 w-4" />
+                  <EyeOff v-else class="h-4 w-4" />
                 </Button>
               </div>
             </div>
@@ -215,8 +215,8 @@ const changePassword = async () => {
                   :title="t(passwordVisibility.confirm ? 'admin.settings.security.hidePassword' : 'admin.settings.security.showPassword')"
                   @click="passwordVisibility.confirm = !passwordVisibility.confirm"
                 >
-                  <EyeOff v-if="passwordVisibility.confirm" class="h-4 w-4" />
-                  <Eye v-else class="h-4 w-4" />
+                <Eye v-if="passwordVisibility.confirm" class="h-4 w-4" />
+                <EyeOff v-else class="h-4 w-4" />
                 </Button>
               </div>
             </div>

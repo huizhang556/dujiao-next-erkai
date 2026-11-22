@@ -19,6 +19,7 @@ import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { notifyError, notifySuccess } from '@/utils/notify'
 import { confirmAction } from '@/utils/confirm'
+import PasswordInput from '@/components/PasswordInput.vue'
 
 const { locale } = useI18n()
 
@@ -951,9 +952,8 @@ onMounted(async () => {
           </div>
           <div class="space-y-2">
             <label class="text-xs text-muted-foreground">{{ text.adminPassword }}</label>
-            <Input
+            <PasswordInput
               v-model="adminForm.password"
-              type="password"
               :placeholder="adminFormMode === 'create' ? text.adminPasswordPlaceholderCreate : text.adminPasswordPlaceholderEdit"
             />
           </div>

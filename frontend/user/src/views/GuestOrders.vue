@@ -19,7 +19,7 @@
         </div>
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Input v-model="email" type="email" class="h-11" :placeholder="t('guestOrders.emailPlaceholder')" />
-          <Input v-model="orderPassword" type="password" class="h-11" :placeholder="t('guestOrders.passwordPlaceholder')" />
+          <PasswordInput v-model="orderPassword" input-class="h-11" :placeholder="t('guestOrders.passwordPlaceholder')" />
           <Input v-model="orderNo" type="text" class="h-11" :placeholder="t('guestOrders.orderNoPlaceholder')" />
           <Button @click="handleSearch" :disabled="loading" class="h-11 px-6 font-bold">
             <Search class="h-4 w-4" />
@@ -94,6 +94,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import PasswordInput from '@/components/PasswordInput.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PaginationNav from '../components/PaginationNav.vue'
 import { useGuestOrders } from '../composables/useGuestOrders'

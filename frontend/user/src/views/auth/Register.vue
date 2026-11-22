@@ -108,8 +108,8 @@
                 class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 @click="showPassword = !showPassword"
               >
-                <EyeOff v-if="showPassword" class="h-4 w-4" />
-                <Eye v-else class="h-4 w-4" />
+                <Eye v-if="showPassword" class="h-4 w-4" />
+                <EyeOff v-else class="h-4 w-4" />
               </button>
             </div>
             <p v-if="formValidation.hasError('password')" class="mt-1.5 text-xs text-destructive">

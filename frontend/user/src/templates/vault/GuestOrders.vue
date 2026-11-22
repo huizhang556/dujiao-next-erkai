@@ -14,7 +14,7 @@
       </div>
       <div class="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto]">
         <Input v-model="email" type="email" class="h-11" :placeholder="t('guestOrders.emailPlaceholder')" />
-        <Input v-model="orderPassword" type="password" class="h-11" :placeholder="t('guestOrders.passwordPlaceholder')" />
+        <PasswordInput v-model="orderPassword" input-class="h-11" :placeholder="t('guestOrders.passwordPlaceholder')" />
         <Input v-model="orderNo" type="text" class="h-11" :placeholder="t('guestOrders.orderNoPlaceholder')" />
         <Button type="button" class="h-11 rounded-full" :disabled="loading" @click="handleSearch">
           <Search /> {{ loading ? t('guestOrders.searching') : t('guestOrders.search') }}
@@ -72,6 +72,7 @@ import { ChevronLeft, ChevronRight, ClipboardList, Search, Eye, CreditCard } fro
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import PasswordInput from '@/components/PasswordInput.vue'
 import { useGuestOrders } from '../../composables/useGuestOrders'
 
 const { t } = useI18n()

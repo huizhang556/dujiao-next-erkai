@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { confirmAction } from '@/utils/confirm'
 import { useFormValidation, rules } from '@/composables/useFormValidation'
 import { ArrowDown, ArrowUp, ChevronsUpDown } from 'lucide-vue-next'
+import PasswordInput from '@/components/PasswordInput.vue'
 
 const { t } = useI18n()
 const loading = ref(true)
@@ -504,7 +505,7 @@ onMounted(() => {
             </div>
             <div>
               <label class="block text-xs font-medium text-muted-foreground mb-1.5">{{ t('admin.users.form.password') }}</label>
-              <Input v-model="form.password" type="password" :placeholder="t('admin.users.form.passwordPlaceholder')" />
+              <PasswordInput v-model="form.password" :placeholder="t('admin.users.form.passwordPlaceholder')" />
               <p class="mt-1 text-xs text-muted-foreground">{{ t('admin.users.form.passwordTip') }}</p>
             </div>
             <div>

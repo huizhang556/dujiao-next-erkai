@@ -17,7 +17,7 @@
         <p class="text-xs text-muted-foreground mb-4">{{ t('guestOrderDetail.authHint') }}</p>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input v-model="auth.email" type="email" class="h-11" :placeholder="t('guestOrders.emailPlaceholder')" />
-          <Input v-model="auth.order_password" type="password" class="h-11" :placeholder="t('guestOrders.passwordPlaceholder')" />
+          <PasswordInput v-model="auth.order_password" input-class="h-11" :placeholder="t('guestOrders.passwordPlaceholder')" />
         </div>
         <Alert v-if="authError" variant="destructive" class="mt-4">
           <AlertDescription>{{ authError }}</AlertDescription>
@@ -423,6 +423,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import PasswordInput from '@/components/PasswordInput.vue'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useGuestOrderDetail } from '../composables/useGuestOrderDetail'
 

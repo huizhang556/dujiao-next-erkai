@@ -98,7 +98,7 @@
                   :aria-label="showPassword ? t('auth.common.hidePassword') : t('auth.common.showPassword')"
                   @click="showPassword = !showPassword"
                 >
-                  <EyeOff v-if="showPassword" class="h-4 w-4" /><Eye v-else class="h-4 w-4" />
+                  <Eye v-if="showPassword" class="h-4 w-4" /><EyeOff v-else class="h-4 w-4" />
                 </button>
               </div>
               <p v-if="formValidation.hasError('password')" class="mt-1.5 text-xs text-destructive">{{ formValidation.getError('password') }}</p>
